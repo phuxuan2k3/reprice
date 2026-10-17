@@ -1,0 +1,18 @@
+# Render Blueprint: một web service chạy Dockerfile ở gốc repo (web + API chung một cổng).
+# Database dùng Neon (miễn phí), nhập DATABASE_URL khi tạo Blueprint. Xem docs/DEPLOY.md.
+services:
+  - type: web
+    name: reprice
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false # nhập tay: chuỗi kết nối Neon
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DEMO_MODE
+        value: "true"

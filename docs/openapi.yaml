@@ -1,0 +1,2107 @@
+openapi: 3.0.3
+info:
+  title: RePrice API
+  version: 0.1.0
+  description: |
+    API của RePrice. Bám theo docs/SPEC.md, docs/state-diagrams.md, docs/erd.md.
+    Quy ước chung và bảng endpoint đọc nhanh: docs/api.md.
+    Tiền là số nguyên (đồng). Thời gian ISO 8601. Mọi đối tượng có trạng thái trả kèm `allowedActions`
+    của người đang gọi.
+servers:
+  - url: http://localhost:8080/api/v1
+security:
+  - bearer: []
+
+tags:
+  - name: auth
+  - name: catalog
+  - name: listings
+  - name: pricing
+  - name: negotiations
+  - name: orders
+  - name: cases
+  - name: admin
+  - name: demo
+
+paths:
+  # ------------------------------------------------------------------ auth
+  /auth/register:
+    post:
+      tags: [auth]
+      security: []
+      summary: Đăng ký (UC01)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, email, password, phone]
+              properties:
+                fullName: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                phone: { type: string }
+                province: { type: string }
+                ward: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Session' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /auth/login:
+    post:
+      tags: [auth]
+      security: []
+      summary: Đăng nhập (UC01)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+        '401': { $ref: '#/components/responses/Error' }
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Đăng xuất (UC01)
+      responses:
+        '204': { description: Đã đăng xuất }
+  /me:
+    get:
+      tags: [auth]
+      summary: Thông tin tài khoản (UC07)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } } }
+    patch:
+      tags: [auth]
+      summary: Sửa thông tin tài khoản (UC07)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName: { type: string }
+                phone: { type: string }
+                province: { type: string }
+                ward: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } } }
+        '422': { $ref: '#/components/responses/Error' }
+  /me/notifications:
+    get:
+      tags: [auth]
+      summary: Thông báo của tôi (UC06)
+      parameters:
+        - { name: unread, in: query, schema: { type: boolean } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      unreadCount: { type: integer }
+                      items: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+  /me/notifications/{id}/read:
+    post:
+      tags: [auth]
+      summary: Đánh dấu đã đọc (UC06)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '204': { description: OK }
+  /me/notifications/read-all:
+    post:
+      tags: [auth]
+      summary: Đánh dấu đọc hết (UC06)
+      responses:
+        '204': { description: OK }
+  /me/favorites:
+    get:
+      tags: [listings]
+      summary: Tin yêu thích (UC05)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ListingSummary' } }
+  /me/favorites/{listingId}:
+    parameters:
+      - { name: listingId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [listings]
+      summary: Lưu yêu thích (UC05)
+      responses:
+        '204': { description: OK }
+    delete:
+      tags: [listings]
+      summary: Bỏ yêu thích (UC05)
+      responses:
+        '204': { description: OK }
+
+  # --------------------------------------------------------------- catalog
+  /catalog/brands:
+    get:
+      tags: [catalog]
+      security: []
+      summary: Danh sách hãng
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { type: string } } } }
+  /catalog/models:
+    get:
+      tags: [catalog]
+      security: []
+      summary: Danh sách model theo hãng
+      parameters:
+        - { name: brand, in: query, required: true, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/PhoneModel' } } } }
+  /catalog/models/{modelId}/variants:
+    get:
+      tags: [catalog]
+      security: []
+      summary: Phiên bản (dung lượng, RAM, màu) của model
+      parameters:
+        - { name: modelId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/PhoneVariant' } } } }
+  /catalog/requests:
+    post:
+      tags: [catalog]
+      summary: Yêu cầu bổ sung model (UC12)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand, modelText, listingId]
+              properties:
+                brand: { type: string }
+                modelText: { type: string }
+                listingId: { type: string, format: uuid, description: Tin nháp đang chờ }
+      responses:
+        '201': { description: Đã gửi }
+
+  # -------------------------------------------------------------- listings
+  /listings:
+    get:
+      tags: [listings]
+      security: []
+      summary: Tìm, lọc, sắp xếp tin đang bán (UC03)
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Hãng / model }
+        - { name: brand, in: query, schema: { type: string } }
+        - { name: modelId, in: query, schema: { type: string, format: uuid } }
+        - { name: storageGb, in: query, schema: { type: integer } }
+        - { name: appearance, in: query, schema: { $ref: '#/components/schemas/Appearance' } }
+        - { name: functionality, in: query, schema: { $ref: '#/components/schemas/Functionality' } }
+        - { name: batteryBucket, in: query, schema: { $ref: '#/components/schemas/BatteryBucket' } }
+        - { name: minPrice, in: query, schema: { type: integer } }
+        - { name: maxPrice, in: query, schema: { type: integer } }
+        - { name: province, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [newest, price_asc, price_desc], default: newest } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Chỉ tin ACTIVE
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/ListingSummary' } }
+    post:
+      tags: [listings]
+      summary: Tạo tin nháp (UC10, UC11)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ListingInput' }
+      responses:
+        '201': { description: Tin DRAFT, content: { application/json: { schema: { $ref: '#/components/schemas/ListingDetail' } } } }
+        '422': { $ref: '#/components/responses/Error' }
+  /listings/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [listings]
+      security: []
+      summary: Chi tiết tin (UC04). Tin nháp chỉ người bán xem được.
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ListingDetail' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [listings]
+      summary: Lưu nháp / sửa tin (UC11, UC13). Chỉ khi tin chưa có đơn.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ListingInput' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ListingDetail' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [listings]
+      summary: Gỡ tin (UC14) → REMOVED; đóng thương lượng đang mở
+      responses:
+        '204': { description: OK }
+        '409': { $ref: '#/components/responses/Error' }
+  /listings/{id}/photos:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post:
+      tags: [listings]
+      summary: Tải ảnh (UC10)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ListingPhoto' } } } }
+        '422': { $ref: '#/components/responses/Error' }
+  /listings/{id}/photos/{photoId}:
+    delete:
+      tags: [listings]
+      summary: Xóa ảnh
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - { name: photoId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: OK }
+  /listings/{id}/photos/order:
+    put:
+      tags: [listings]
+      summary: Sắp xếp ảnh; ảnh đầu là ảnh bìa
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [photoIds]
+              properties:
+                photoIds: { type: array, items: { type: string, format: uuid } }
+      responses:
+        '204': { description: OK }
+  /listings/{id}/publish:
+    post:
+      tags: [listings]
+      summary: Đăng tin DRAFT → ACTIVE (UC10)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmAccuracy]
+              properties:
+                confirmAccuracy: { type: boolean, description: Ô tích "Tôi xác nhận thông tin và ảnh..." }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ListingDetail' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /listings/{id}/pause:
+    post:
+      tags: [listings]
+      summary: Tạm ẩn ACTIVE → PAUSED (UC14)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ListingDetail' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /listings/{id}/resume:
+    post:
+      tags: [listings]
+      summary: Hiện lại PAUSED → ACTIVE (UC14)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ListingDetail' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /me/listings:
+    get:
+      tags: [listings]
+      summary: Tin của tôi (UC14)
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ListingStatus' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/ListingSummary' } }
+
+  # --------------------------------------------------------------- pricing
+  /listings/{id}/reference-price:
+    get:
+      tags: [pricing]
+      security: []
+      summary: Giá tham khảo GĐ1 + GĐ2 cho một tin (UC40)
+      description: |
+        Người bán của tin (kể cả tin nháp ở bước nhập giá) nhận viewerRole SELLER, priceLabel YOUR_PRICE.
+        Người khác nhận BUYER, LISTING_PRICE. Tham số `price` thay giá rao để xem trước khi người bán gõ giá.
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - { name: price, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PriceReference' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+  /reference-price/preview:
+    post:
+      tags: [pricing]
+      summary: Xem trước giá tham khảo khi đang đăng tin, chưa lưu tin (UC10 bước 4)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variant]
+              properties:
+                variant: { $ref: '#/components/schemas/ListingInput/properties/variant' }
+                condition: { $ref: '#/components/schemas/Condition' }
+                price: { type: integer, nullable: true }
+      responses:
+        '200': { description: viewerRole luôn là SELLER, content: { application/json: { schema: { $ref: '#/components/schemas/PriceReference' } } } }
+        '422': { $ref: '#/components/responses/Error' }
+  /price-ranges/{versionId}:
+    get:
+      tags: [pricing]
+      security: []
+      summary: Dữ liệu so sánh của một dải giá GĐ2 (UC42)
+      parameters:
+        - { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Danh sách giá chốt đã dùng, không có thông tin người mua/bán
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PriceRangeVersion'
+                  - type: object
+                    properties:
+                      prices:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            price: { type: integer }
+                            transactionDate: { type: string, format: date }
+
+  # ---------------------------------------------------------- negotiations
+  /listings/{id}/buy-now:
+    post:
+      tags: [negotiations]
+      summary: Mua ngay theo giá rao → tạo đơn (UC20, UC24)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedPrice]
+              properties:
+                expectedPrice: { type: integer, description: Giá rao người mua đang thấy; lệch giá hiện tại → 409 }
+      responses:
+        '201': { description: Đơn AWAITING_PAYMENT, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /listings/{id}/negotiations:
+    post:
+      tags: [negotiations]
+      summary: Gửi đề nghị giá đầu tiên (UC21)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OfferInput' }
+      responses:
+        '201': { description: AWAITING_SELLER, content: { application/json: { schema: { $ref: '#/components/schemas/Negotiation' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { description: Đã có thương lượng mở với tin này hoặc tin không ACTIVE, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /me/negotiations:
+    get:
+      tags: [negotiations]
+      summary: Thương lượng của tôi
+      parameters:
+        - { name: role, in: query, required: true, schema: { type: string, enum: [buyer, seller] } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/NegotiationStatus' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Negotiation' } }
+  /negotiations/{id}:
+    get:
+      tags: [negotiations]
+      summary: Chi tiết thương lượng và lịch sử đề nghị
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Negotiation' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+  /negotiations/{id}/offers:
+    post:
+      tags: [negotiations]
+      summary: Đề nghị giá khác, bên đến lượt (UC22, UC23)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OfferInput' }
+      responses:
+        '200': { description: Chuyển lượt cho bên kia, content: { application/json: { schema: { $ref: '#/components/schemas/Negotiation' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /negotiations/{id}/accept:
+    post:
+      tags: [negotiations]
+      summary: Chấp nhận giá của bên kia → AGREED và tạo đơn (UC22–UC24)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  negotiation: { $ref: '#/components/schemas/Negotiation' }
+                  order: { $ref: '#/components/schemas/Order' }
+        '409': { $ref: '#/components/responses/Error' }
+  /negotiations/{id}/reject:
+    post:
+      tags: [negotiations]
+      summary: Từ chối → REJECTED, không tạo đơn (UC22, UC23)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { note: { type: string } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Negotiation' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /negotiations/{id}/cancel:
+    post:
+      tags: [negotiations]
+      summary: Người mua hủy thương lượng (UC25)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Negotiation' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------- orders
+  /me/orders:
+    get:
+      tags: [orders]
+      summary: Đơn mua / đơn bán của tôi (UC36)
+      parameters:
+        - { name: role, in: query, required: true, schema: { type: string, enum: [buyer, seller] } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/OrderStatus' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/OrderSummary' } }
+  /orders/{id}:
+    get:
+      tags: [orders]
+      summary: Chi tiết đơn (UC36)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+  /orders/{id}/history:
+    get:
+      tags: [orders]
+      summary: Lịch sử chuyển trạng thái đơn
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/StatusChange' } }
+  /orders/{id}/shipping-info:
+    put:
+      tags: [orders]
+      summary: Người mua nhập thông tin nhận hàng (UC30)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShippingInfo' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /orders/{id}/payment:
+    post:
+      tags: [orders]
+      summary: Chọn phương thức thanh toán (UC30)
+      description: |
+        COD → đơn CONFIRMED ngay, payment COD_PENDING.
+        PREPAID → payment PENDING; kết quả đến từ cổng thanh toán (demo: POST /demo/payments/{orderId}/result).
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method]
+              properties:
+                method: { $ref: '#/components/schemas/PaymentMethod' }
+                channel: { type: string, enum: [BANK_TRANSFER, EWALLET, QR], description: Chỉ với PREPAID }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+  /orders/{id}/cancel:
+    post:
+      tags: [orders]
+      summary: Hủy đơn trước khi bàn giao vận chuyển (UC32)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: CANCELLED; tạo Refund nếu đã trả trước, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /orders/{id}/handover:
+    post:
+      tags: [orders]
+      summary: Người bán chuẩn bị và tạo vận đơn (UC33)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '201': { description: Shipment AWAITING_PICKUP, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /orders/{id}/receive:
+    post:
+      tags: [orders]
+      summary: Người mua bấm "Đã nhận hàng" (UC37)
+      description: Ghi receivedAt; returnDeadline = receivedAt + 3 ngày. Đơn chưa hoàn tất ngay.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: RECEIVED, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /orders/{id}/review:
+    post:
+      tags: [orders]
+      summary: Đánh giá người bán (UC39)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                comment: { type: string }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Review' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /shipments/{id}:
+    get:
+      tags: [orders]
+      summary: Vận đơn và các mốc (UC34)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Shipment' } } } }
+
+  # ----------------------------------------------------------------- cases
+  /orders/{id}/cases:
+    post:
+      tags: [cases]
+      summary: Mở hồ sơ trả hàng / báo chưa nhận / khiếu nại (UC50, UC51, UC61)
+      description: |
+        RETURN chỉ trước returnDeadline (410 nếu quá hạn). Mỗi đơn một hồ sơ mở (409, details.openCaseId).
+        Bằng chứng tải sau qua POST /cases/{id}/evidence.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, reason, description]
+              properties:
+                type: { $ref: '#/components/schemas/CaseType' }
+                reason: { $ref: '#/components/schemas/CaseReason' }
+                description: { type: string }
+                discoveredAt: { type: string, format: date-time }
+                orderItemIds: { type: array, items: { type: string, format: uuid }, description: Mặc định mọi máy trong đơn }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+  /me/cases:
+    get:
+      tags: [cases]
+      summary: Hồ sơ liên quan đến tôi
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/CaseStatus' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/SupportCase' } }
+  /cases/{id}:
+    get:
+      tags: [cases]
+      summary: Chi tiết hồ sơ, dòng thời gian, bằng chứng được phép xem
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+  /cases/{id}/evidence:
+    post:
+      tags: [cases]
+      summary: Tải bằng chứng (ảnh, video, tài liệu)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+                files: { type: array, items: { type: string, format: binary } }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Evidence' } } } }
+  /cases/{id}/seller-response:
+    post:
+      tags: [cases]
+      summary: Người bán đồng ý / từ chối / yêu cầu bổ sung (UC53)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, message]
+              properties:
+                action: { type: string, enum: [AGREE, REJECT, REQUEST_INFO] }
+                message: { type: string, description: Bắt buộc có lý do khi REJECT, nội dung cần bổ sung khi REQUEST_INFO }
+                returnAddress: { $ref: '#/components/schemas/ShippingInfo' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+        '409': { description: Sai bước hoặc đã dùng lượt yêu cầu bổ sung, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /cases/{id}/buyer-supplement:
+    post:
+      tags: [cases]
+      summary: Người mua bổ sung thông tin (UC54)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, description: Câu trả lời, hoặc lý do không cung cấp được }
+      responses:
+        '200': { description: AWAITING_SELLER_DECISION, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /cases/{id}/buyer-choice:
+    post:
+      tags: [cases]
+      summary: Sau khi bị từ chối — chuyển QTV hoặc kết thúc (UC55)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [ESCALATE, WITHDRAW] }
+                note: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /cases/{id}/return-handover:
+    post:
+      tags: [cases]
+      summary: Người mua đã bàn giao hàng trả (UC57)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                obstacle: { type: string, description: Điền khi không thể gửi trả → chuyển QTV }
+      responses:
+        '200': { description: RETURNING, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /cases/{id}/return-inspection:
+    post:
+      tags: [cases]
+      summary: Người bán kiểm tra hàng trả (UC58)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [result]
+              properties:
+                result: { type: string, enum: [OK, PROBLEM] }
+                problemType: { type: string, enum: [WRONG_DEVICE, MISSING_ITEMS, NEW_DAMAGE, OTHER] }
+                message: { type: string }
+      responses:
+        '200': { description: OK → REFUNDING; PROBLEM → ADMIN_REVIEW, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /cases/{id}/review-request:
+    post:
+      tags: [cases]
+      summary: Đề nghị xem xét lại phương án trong 48 giờ (UC60)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: ADMIN_REVIEW, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+  /cases/{id}/refund-not-received:
+    post:
+      tags: [cases]
+      summary: Người mua báo chưa nhận được tiền hoàn (UC59)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { note: { type: string } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+
+  # ----------------------------------------------------------------- admin
+  /admin/dashboard:
+    get:
+      tags: [admin]
+      summary: Dashboard (UC72)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Dashboard' } } } }
+  /admin/cases:
+    get:
+      tags: [admin]
+      summary: Danh sách hồ sơ (UC56)
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/CaseStatus' } }
+        - { name: type, in: query, schema: { $ref: '#/components/schemas/CaseType' } }
+        - { name: overdue, in: query, schema: { type: boolean } }
+        - { name: assignee, in: query, schema: { type: string, description: 'uuid hoặc "me"' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/SupportCase' } }
+  /admin/cases/{id}/assign:
+    post:
+      tags: [admin]
+      summary: Nhận xử lý hồ sơ
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+  /admin/cases/{id}/request-info:
+    post:
+      tags: [admin]
+      summary: Yêu cầu một bên bổ sung (UC56)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [party, message, dueAt]
+              properties:
+                party: { type: string, enum: [BUYER, SELLER] }
+                message: { type: string }
+                dueAt: { type: string, format: date-time }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+  /admin/cases/{id}/shipping-verifications:
+    post:
+      tags: [admin]
+      summary: Gửi yêu cầu xác minh vận chuyển (UC51, UC56)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shipmentId, question]
+              properties:
+                shipmentId: { type: string, format: uuid }
+                question: { type: string }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ShippingVerification' } } } }
+  /admin/shipping-verifications/{id}:
+    patch:
+      tags: [admin]
+      summary: Ghi nhận phản hồi của đơn vị vận chuyển
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [SENT, AWAITING, RESPONDED] }
+                ticketCode: { type: string }
+                response: { type: string }
+                outcome: { type: string, enum: [DELIVERY_MISRECORDED, STILL_IN_TRANSIT, WRONG_RECIPIENT, LOST, INCONCLUSIVE] }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ShippingVerification' } } } }
+  /admin/cases/{id}/resolutions:
+    post:
+      tags: [admin]
+      summary: Ban hành phương án (UC56) → PLAN_REVIEW 48 giờ
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, rationale]
+              properties:
+                decision: { type: string, enum: [APPROVE_RETURN, REFUND_NO_RETURN, REJECT, CONTINUE_VERIFY] }
+                rationale: { type: string }
+                evidenceIds: { type: array, items: { type: string, format: uuid } }
+                refundAmount: { type: integer, description: Toàn bộ tiền hàng }
+                feeAllocation:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      fee: { type: string }
+                      amount: { type: integer }
+                      payer: { type: string, enum: [BUYER, SELLER, PLATFORM, UNDECIDED] }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/cases/{id}/return-address:
+    post:
+      tags: [admin]
+      summary: QTV xác nhận địa chỉ nhận trả và tạo vận đơn trả (UC57)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShippingInfo' }
+      responses:
+        '200': { description: AWAITING_HANDOVER, content: { application/json: { schema: { $ref: '#/components/schemas/SupportCase' } } } }
+  /admin/refunds/{id}/process:
+    post:
+      tags: [admin]
+      summary: Gửi lệnh hoàn APPROVED → PROCESSING (UC59)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Refund' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/refunds/{id}/retry:
+    post:
+      tags: [admin]
+      summary: Gửi lại sau khi xác nhận lệnh trước FAILED (UC59)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Refund' } } } }
+        '409': { description: Đang RECONCILING hoặc chưa FAILED, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /admin/reference-transactions:
+    get:
+      tags: [admin]
+      summary: Danh sách giao dịch tham chiếu (UC70)
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ReferenceStatus' } }
+        - { name: dataSource, in: query, schema: { $ref: '#/components/schemas/DataSource' } }
+        - { name: flag, in: query, schema: { $ref: '#/components/schemas/FlagCode' } }
+        - { name: clusterId, in: query, schema: { type: string, format: uuid } }
+        - { name: variantId, in: query, schema: { type: string, format: uuid } }
+        - { name: conditionKey, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: q, in: query, schema: { type: string }, description: Mã đơn hoặc mã chi tiết }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/ReferenceTransaction' } }
+  /admin/reference-transactions/{id}:
+    get:
+      tags: [admin]
+      summary: Chi tiết giao dịch tham chiếu, snapshot, cờ, cụm, lịch sử quyết định (UC70)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ReferenceTransactionDetail' } } } }
+  /admin/reference-transactions/{id}/decisions:
+    post:
+      tags: [admin]
+      summary: Quyết định dữ liệu tham chiếu (UC71)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, reason]
+              properties:
+                action: { type: string, enum: [ALLOW, KEEP_PENDING, EXCLUDE, REVOKE, REVOKE_RECALC] }
+                reason: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transaction: { $ref: '#/components/schemas/ReferenceTransactionDetail' }
+                  recalculatedRanges: { type: array, items: { $ref: '#/components/schemas/PriceRangeVersion' } }
+        '409': { $ref: '#/components/responses/Error' }
+  /admin/price-ranges:
+    get:
+      tags: [admin]
+      summary: Dải giá đang công bố theo nhóm máy
+      parameters:
+        - { name: variantId, in: query, schema: { type: string, format: uuid } }
+        - { name: dataSource, in: query, schema: { $ref: '#/components/schemas/DataSource' } }
+        - { name: current, in: query, schema: { type: boolean, default: true } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/PriceRangeVersion' } } } }
+  /admin/pricing-config:
+    get:
+      tags: [admin]
+      summary: Cấu hình ngưỡng giá (UC74)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PricingConfig' } } } }
+    put:
+      tags: [admin]
+      summary: Sửa cấu hình (UC74); zThreshold null = chưa thiết lập
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/PricingConfig'
+                - type: object
+                  required: [reason]
+                  properties:
+                    reason: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PricingConfig' } } } }
+  /admin/store-sources:
+    get:
+      tags: [admin]
+      summary: Nguồn bán lẻ GĐ1 (UC73)
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/StoreSource' } } } }
+    post:
+      tags: [admin]
+      summary: Thêm nguồn
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [retailerName, website]
+              properties:
+                retailerName: { type: string }
+                website: { type: string }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/StoreSource' } } } }
+  /admin/store-sources/{id}:
+    patch:
+      tags: [admin]
+      summary: Bật / tắt nguồn
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { active: { type: boolean }, website: { type: string } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/StoreSource' } } } }
+  /admin/store-quotes:
+    get:
+      tags: [admin]
+      summary: Báo giá máy mới theo phiên bản (UC41)
+      parameters:
+        - { name: variantId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/StoreQuote' } } } }
+    put:
+      tags: [admin]
+      summary: Ghi / cập nhật báo giá (nhập tay hoặc từ bộ thu thập); verifiedAt = giờ hệ thống
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceId, variantId, price, inStock, url]
+              properties:
+                sourceId: { type: string, format: uuid }
+                variantId: { type: string, format: uuid }
+                color: { type: string, nullable: true }
+                price: { type: integer, description: Giá bán hiện tại, gồm VAT, không ưu đãi có điều kiện }
+                inStock: { type: boolean }
+                url: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/StoreQuote' } } } }
+  /admin/catalog/models:
+    post:
+      tags: [admin]
+      summary: Thêm model (UC73)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand, name]
+              properties:
+                brand: { type: string }
+                name: { type: string }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PhoneModel' } } } }
+  /admin/catalog/models/{id}/variants:
+    post:
+      tags: [admin]
+      summary: Thêm phiên bản (UC73)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [storageGb]
+              properties:
+                storageGb: { type: integer }
+                ramGb: { type: integer, nullable: true }
+                color: { type: string, nullable: true }
+      responses:
+        '201': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PhoneVariant' } } } }
+  /admin/catalog/requests:
+    get:
+      tags: [admin]
+      summary: Yêu cầu bổ sung danh mục (UC12)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    seller: { $ref: '#/components/schemas/UserRef' }
+                    brand: { type: string }
+                    modelText: { type: string }
+                    status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+                    createdAt: { type: string, format: date-time }
+  /admin/catalog/requests/{id}/decision:
+    post:
+      tags: [admin]
+      summary: Duyệt / từ chối yêu cầu danh mục; báo người bán tiếp tục đăng
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [APPROVED, REJECTED] }
+                variantId: { type: string, format: uuid, description: Phiên bản vừa thêm, khi APPROVED }
+                reason: { type: string }
+      responses:
+        '200': { description: OK }
+  /admin/users:
+    get:
+      tags: [admin]
+      summary: Tra cứu tài khoản (UC75)
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Me' } }
+  /admin/listings:
+    get:
+      tags: [admin]
+      summary: Tra cứu tin đăng (UC75)
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ListingStatus' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/ListingSummary' } }
+  /admin/listings/{id}/hide:
+    post:
+      tags: [admin]
+      summary: Ẩn tin vi phạm (UC75); không đụng đơn đã có
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [reason], properties: { reason: { type: string } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ListingDetail' } } } }
+  /admin/orders:
+    get:
+      tags: [admin]
+      summary: Tra cứu đơn toàn hệ thống
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Mã đơn }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/OrderStatus' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/OrderSummary' } }
+  /admin/audit-logs:
+    get:
+      tags: [admin]
+      summary: Nhật ký thao tác quản trị
+      parameters:
+        - { name: entityType, in: query, schema: { type: string } }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/AuditLog' } }
+
+  # ------------------------------------------------------------------ demo
+  /demo/accounts:
+    get:
+      tags: [demo]
+      security: []
+      summary: Tài khoản mẫu cho thanh chuyển vai trò (UC02)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/UserRef'
+                    - type: object
+                      properties:
+                        demoRole: { type: string, enum: [BUYER, SELLER, ADMIN] }
+  /demo/login-as:
+    post:
+      tags: [demo]
+      security: []
+      summary: Đăng nhập nhanh bằng tài khoản mẫu (UC02)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [userId], properties: { userId: { type: string, format: uuid } } }
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+  /demo/clock:
+    get:
+      tags: [demo]
+      summary: Giờ hệ thống hiện tại (đã cộng độ lệch)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Clock' } } } }
+  /demo/clock/advance:
+    post:
+      tags: [demo]
+      summary: Tua thời gian (UC76); chạy ngay bộ lập lịch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [hours], properties: { hours: { type: integer, minimum: 1, maximum: 720 } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Clock'
+                  - type: object
+                    properties:
+                      jobsRun:
+                        type: array
+                        items: { type: string }
+                        example: ['orders.autoCancel: 1', 'orders.autoComplete: 2', 'cases.escalate: 0']
+  /demo/payments/{orderId}/result:
+    post:
+      tags: [demo]
+      summary: Cổng thanh toán giả trả kết quả
+      parameters:
+        - { name: orderId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [result], properties: { result: { type: string, enum: [SUCCESS, FAILED] } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+  /demo/refunds/{id}/result:
+    post:
+      tags: [demo]
+      summary: Cổng thanh toán giả trả kết quả hoàn tiền
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [result], properties: { result: { type: string, enum: [SUCCEEDED, FAILED, UNKNOWN] } } }
+      responses:
+        '200': { description: UNKNOWN → RECONCILING, content: { application/json: { schema: { $ref: '#/components/schemas/Refund' } } } }
+  /demo/shipments/{id}/advance:
+    post:
+      tags: [demo]
+      summary: Đơn vị vận chuyển giả chuyển sang mốc tiếp theo (UC34)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { to: { $ref: '#/components/schemas/ShipmentStatus' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Shipment' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /demo/shipments/{id}/fail:
+    post:
+      tags: [demo]
+      summary: Giả lập giao thất bại / người mua từ chối nhận / sự cố (UC35)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [DELIVERY_FAILED, RECIPIENT_REFUSED, INCIDENT] }
+                note: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Shipment' } } } }
+  /demo/reset:
+    post:
+      tags: [demo]
+      summary: Xóa dữ liệu, nạp lại seed và fixture 42 giao dịch SIMULATED
+      responses:
+        '204': { description: OK }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    PageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+
+  responses:
+    Error:
+      description: Lỗi
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Session:
+      description: Phiên đăng nhập
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              token: { type: string }
+              user: { $ref: '#/components/schemas/Me' }
+
+  schemas:
+    # --- chung
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, enum: [BAD_REQUEST, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, INVALID_STATE, CONFLICT, DEADLINE_PASSED, VALIDATION_FAILED, INTERNAL] }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+    PageMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    Deadline:
+      type: object
+      description: '"Ai cần làm gì trước thời điểm nào"'
+      properties:
+        party: { type: string, enum: [BUYER, SELLER, ADMIN, SYSTEM] }
+        action: { type: string }
+        dueAt: { type: string, format: date-time }
+    StatusChange:
+      type: object
+      properties:
+        from: { type: string, nullable: true }
+        to: { type: string }
+        actor: { allOf: [{ $ref: '#/components/schemas/UserRef' }], nullable: true, description: null = bộ lập lịch }
+        reason: { type: string }
+        at: { type: string, format: date-time }
+
+    # --- người dùng
+    UserRef:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+        sellerRating: { type: number, nullable: true }
+    Me:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        province: { type: string }
+        ward: { type: string }
+        isAdmin: { type: boolean }
+        sellerRating: { type: number, nullable: true }
+        createdAt: { type: string, format: date-time }
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, example: NEGOTIATION_COUNTER }
+        title: { type: string }
+        body: { type: string }
+        link: { type: string, example: /negotiations/… }
+        readAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    # --- danh mục & tin
+    PhoneModel:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        brand: { type: string }
+        name: { type: string }
+    PhoneVariant:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        modelId: { type: string, format: uuid }
+        brand: { type: string }
+        modelName: { type: string }
+        storageGb: { type: integer }
+        ramGb: { type: integer, nullable: true }
+        color: { type: string, nullable: true }
+    ListingStatus: { type: string, enum: [DRAFT, ACTIVE, PAUSED, IN_TRANSACTION, SOLD, REMOVED] }
+    Appearance: { type: string, enum: [EXCELLENT, GOOD, FAIR, POOR] }
+    Functionality: { type: string, enum: [FULL, HAS_FAULTS, NOT_FULLY_CHECKED] }
+    BatteryBucket: { type: string, enum: [GE_90, FROM_80_TO_89, LT_80] }
+    Condition:
+      type: object
+      properties:
+        appearance: { $ref: '#/components/schemas/Appearance' }
+        functionality: { $ref: '#/components/schemas/Functionality' }
+        faults:
+          type: array
+          items:
+            type: object
+            properties:
+              component: { type: string, example: CAMERA }
+              severity: { type: string, enum: [DEGRADED, NOT_WORKING] }
+              note: { type: string }
+        remainingChecked: { type: boolean, nullable: true, description: '"Đã kiểm tra các chức năng còn lại" khi có lỗi' }
+        batteryHealthPct: { type: integer, minimum: 0, maximum: 100, nullable: true }
+        batteryStatusText: { type: string, nullable: true }
+        batteryBucket: { allOf: [{ $ref: '#/components/schemas/BatteryBucket' }], nullable: true, readOnly: true }
+        conditionKey: { type: string, nullable: true, readOnly: true, example: 'GOOD|FULL|GE_90' }
+    ListingInput:
+      type: object
+      description: Mọi trường đều tùy chọn khi lưu nháp; publish kiểm tra đủ trường bắt buộc.
+      properties:
+        variant:
+          type: object
+          description: Chọn theo danh mục; màu ngoài danh mục (người bán tự nhập) tạo phiên bản mới cùng model + dung lượng. Màu null = không rõ.
+          properties:
+            modelId: { type: string, format: uuid }
+            storageGb: { type: integer }
+            ramGb: { type: integer, nullable: true }
+            color: { type: string, nullable: true, maxLength: 30 }
+        networkLock: { type: string, enum: [UNLOCKED, LOCKED, UNKNOWN] }
+        condition: { $ref: '#/components/schemas/Condition' }
+        usageMonths: { type: integer, minimum: 0, nullable: true }
+        accessories:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [BOX, CHARGER, CABLE, EARPHONES, CASE, OTHER] }
+              note: { type: string }
+        warrantyType: { type: string, enum: [NONE, BRAND, STORE, BOTH, UNKNOWN] }
+        warrantyUntil: { type: string, format: date, nullable: true }
+        warrantyStore: { type: string, nullable: true }
+        description: { type: string }
+        price: { type: integer, minimum: 1 }
+        province: { type: string }
+        ward: { type: string }
+        contactPhone: { type: string }
+        draftStep: { type: integer, minimum: 1, maximum: 5 }
+    ListingPhoto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string }
+        position: { type: integer }
+        isCover: { type: boolean }
+    ListingSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, example: iPhone 13 128GB }
+        coverUrl: { type: string }
+        price: { type: integer }
+        appearance: { $ref: '#/components/schemas/Appearance' }
+        batteryBucket: { allOf: [{ $ref: '#/components/schemas/BatteryBucket' }], nullable: true }
+        province: { type: string }
+        status: { $ref: '#/components/schemas/ListingStatus' }
+        seller: { $ref: '#/components/schemas/UserRef' }
+        publishedAt: { type: string, format: date-time }
+        isFavorite: { type: boolean }
+    ListingDetail:
+      allOf:
+        - $ref: '#/components/schemas/ListingInput'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            title: { type: string }
+            variant: { $ref: '#/components/schemas/PhoneVariant' }
+            status: { $ref: '#/components/schemas/ListingStatus' }
+            photos: { type: array, items: { $ref: '#/components/schemas/ListingPhoto' } }
+            seller: { $ref: '#/components/schemas/UserRef' }
+            isFavorite: { type: boolean }
+            myOpenNegotiationId: { type: string, format: uuid, nullable: true }
+            publishedAt: { type: string, format: date-time, nullable: true }
+            updatedAt: { type: string, format: date-time }
+            allowedActions:
+              type: array
+              items: { type: string, enum: [EDIT, PUBLISH, PAUSE, RESUME, REMOVE, BUY_NOW, NEGOTIATE, FAVORITE] }
+
+    # --- giá tham khảo
+    DataSource: { type: string, enum: [REAL, SIMULATED] }
+    PriceReference:
+      type: object
+      properties:
+        viewerRole: { type: string, enum: [BUYER, SELLER] }
+        price: { type: integer, nullable: true, description: Giá đang xét; null khi người bán chưa nhập }
+        priceLabel: { type: string, enum: [LISTING_PRICE, YOUR_PRICE] }
+        newPrice: { $ref: '#/components/schemas/NewPriceResult' }
+        usedPrice: { $ref: '#/components/schemas/UsedPriceResult' }
+        positionLabel: { type: string, enum: [BELOW_RANGE, IN_RANGE, ABOVE_RANGE], nullable: true, description: So với GĐ2; null khi GĐ2 không có dải hoặc chưa có giá }
+        newPricePosition: { type: string, enum: [BELOW_RANGE, IN_RANGE, ABOVE_RANGE], nullable: true, description: Chỉ để đặt dấu trên thanh GĐ1, không hiện nhãn }
+        showReviewPrompt: { type: boolean }
+        reviewDirection: { type: string, enum: [LOW_PRICE, HIGH_PRICE], nullable: true }
+    NewPriceResult:
+      type: object
+      properties:
+        status: { type: string, enum: [NO_DATA, SINGLE_PRICE, RANGE] }
+        lowerPrice: { type: integer, nullable: true }
+        upperPrice: { type: integer, nullable: true }
+        missingFields: { type: array, items: { type: string }, description: Khi thiếu thông tin phiên bản }
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              retailer: { type: string }
+              price: { type: integer }
+              color: { type: string, nullable: true }
+              url: { type: string }
+              verifiedAt: { type: string, format: date-time }
+    UsedPriceResult:
+      type: object
+      properties:
+        status: { type: string, enum: [NO_DATA, INSUFFICIENT_DATA, SINGLE_PRICE, RANGE] }
+        lowerPrice: { type: integer, nullable: true, description: P10 }
+        upperPrice: { type: integer, nullable: true, description: P90 }
+        transactionCount: { type: integer }
+        minTransactions: { type: integer, example: 35 }
+        windowMonths: { type: integer, enum: [3, 6, 12], nullable: true }
+        periodStart: { type: string, format: date, nullable: true }
+        periodEnd: { type: string, format: date, nullable: true }
+        dataSource: { $ref: '#/components/schemas/DataSource' }
+        versionId: { type: string, format: uuid, nullable: true }
+        group:
+          type: object
+          properties:
+            variantId: { type: string, format: uuid }
+            conditionKey: { type: string, nullable: true }
+        missingCriteria:
+          type: array
+          items: { type: string, enum: [APPEARANCE, FUNCTIONALITY, BATTERY] }
+    PriceRangeVersion:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        variant: { $ref: '#/components/schemas/PhoneVariant' }
+        conditionKey: { type: string }
+        dataSource: { $ref: '#/components/schemas/DataSource' }
+        result: { type: string, enum: [RANGE, SINGLE_PRICE, INSUFFICIENT_DATA, NO_DATA] }
+        windowMonths: { type: integer, nullable: true }
+        transactionCount: { type: integer }
+        p10: { type: integer, nullable: true }
+        p90: { type: integer, nullable: true }
+        periodStart: { type: string, format: date, nullable: true }
+        periodEnd: { type: string, format: date, nullable: true }
+        isCurrent: { type: boolean }
+        computedAt: { type: string, format: date-time }
+    PricingConfig:
+      type: object
+      properties:
+        minTransactions: { type: integer, example: 35 }
+        windowsMonths: { type: array, items: { type: integer }, example: [3, 6, 12] }
+        newPriceMaxAgeHours: { type: integer, example: 24 }
+        zThreshold: { type: number, nullable: true, description: null = Chưa thiết lập, không hiện lời nhắc }
+        maxSellerConcentration: { type: number, nullable: true }
+        maxClusterConcentration: { type: number, nullable: true }
+        minIndependentBuyers: { type: integer, nullable: true }
+        minIndependentSellers: { type: integer, nullable: true }
+    StoreSource:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        retailerName: { type: string }
+        website: { type: string }
+        active: { type: boolean }
+    StoreQuote:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        source: { $ref: '#/components/schemas/StoreSource' }
+        variantId: { type: string, format: uuid }
+        color: { type: string, nullable: true }
+        price: { type: integer }
+        inStock: { type: boolean }
+        url: { type: string }
+        verifiedAt: { type: string, format: date-time }
+        status: { type: string, enum: [ACTIVE, SUSPENDED] }
+
+    # --- thương lượng
+    NegotiationStatus: { type: string, enum: [AWAITING_SELLER, AWAITING_BUYER, AGREED, REJECTED, CANCELLED, CLOSED] }
+    OfferInput:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: integer, minimum: 1 }
+        note: { type: string }
+    Negotiation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        listing: { $ref: '#/components/schemas/ListingSummary' }
+        buyer: { $ref: '#/components/schemas/UserRef' }
+        seller: { $ref: '#/components/schemas/UserRef' }
+        listingPriceAtStart: { type: integer }
+        currentListingPrice: { type: integer }
+        status: { $ref: '#/components/schemas/NegotiationStatus' }
+        currentOffer: { type: integer, nullable: true, description: Mức giá đang chờ bên kia trả lời }
+        agreedPrice: { type: integer, nullable: true }
+        closedReason: { type: string, nullable: true }
+        orderId: { type: string, format: uuid, nullable: true }
+        offers:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              by: { type: string, enum: [BUYER, SELLER] }
+              amount: { type: integer }
+              note: { type: string }
+              createdAt: { type: string, format: date-time }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [OFFER, ACCEPT, REJECT, CANCEL, VIEW_ORDER] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    # --- đơn hàng
+    OrderStatus: { type: string, enum: [AWAITING_PAYMENT, CONFIRMED, SHIPPING, DELIVERED, RECEIVED, ON_HOLD, COMPLETED, REFUNDED, CANCELLED, RETURNED_TO_SELLER] }
+    PaymentMethod: { type: string, enum: [PREPAID, COD] }
+    ShippingInfo:
+      type: object
+      required: [recipientName, recipientPhone, addressLine, province, ward]
+      properties:
+        recipientName: { type: string }
+        recipientPhone: { type: string }
+        addressLine: { type: string }
+        province: { type: string }
+        ward: { type: string }
+    OrderItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid, description: Mã chi tiết giao dịch }
+        listingId: { type: string, format: uuid }
+        title: { type: string }
+        coverUrl: { type: string }
+        listingPriceAtAgreement: { type: integer }
+        agreedPrice: { type: integer }
+        snapshot:
+          type: object
+          description: Thông tin máy và tình trạng lúc chốt giá
+          properties:
+            variant: { $ref: '#/components/schemas/PhoneVariant' }
+            condition: { $ref: '#/components/schemas/Condition' }
+            accessories: { type: array, items: { type: string } }
+            description: { type: string }
+    OrderSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: RP-20261016-0001 }
+        title: { type: string }
+        coverUrl: { type: string }
+        agreedTotal: { type: integer }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        counterpart: { $ref: '#/components/schemas/UserRef' }
+        createdAt: { type: string, format: date-time }
+        hasOpenCase: { type: boolean }
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        buyer: { $ref: '#/components/schemas/UserRef' }
+        seller: { $ref: '#/components/schemas/UserRef' }
+        negotiationId: { type: string, format: uuid, nullable: true }
+        items: { type: array, items: { $ref: '#/components/schemas/OrderItem' } }
+        goodsTotal: { type: integer, description: Tổng giá chốt các máy }
+        shippingFee: { type: integer }
+        shippingInfo: { allOf: [{ $ref: '#/components/schemas/ShippingInfo' }], nullable: true }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        payment: { $ref: '#/components/schemas/Payment' }
+        payout: { allOf: [{ $ref: '#/components/schemas/Payout' }], nullable: true }
+        shipments: { type: array, items: { $ref: '#/components/schemas/Shipment' } }
+        openCaseId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        paymentDueAt: { type: string, format: date-time }
+        deliveredAt: { type: string, format: date-time, nullable: true }
+        receivedAt: { type: string, format: date-time, nullable: true }
+        returnDeadline: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        cancelledAt: { type: string, format: date-time, nullable: true }
+        cancelReason: { type: string, nullable: true }
+        nextStep: { $ref: '#/components/schemas/Deadline' }
+        canReview: { type: boolean }
+        allowedActions:
+          type: array
+          items: { type: string, enum: [SET_SHIPPING_INFO, PAY, CANCEL, HANDOVER, RECEIVE, OPEN_RETURN, REPORT_NOT_RECEIVED, OPEN_COMPLAINT, REVIEW, VIEW_CASE] }
+    Payment:
+      type: object
+      properties:
+        method: { allOf: [{ $ref: '#/components/schemas/PaymentMethod' }], nullable: true }
+        channel: { type: string, nullable: true }
+        amount: { type: integer }
+        status: { type: string, enum: [PENDING, PAID, FAILED, COD_PENDING, COD_COLLECTED, VOID] }
+        providerRef: { type: string, nullable: true }
+        paidAt: { type: string, format: date-time, nullable: true }
+        simulated: { type: boolean }
+    Payout:
+      type: object
+      properties:
+        amount: { type: integer }
+        status: { type: string, enum: [HELD, RELEASED, REVERSED] }
+        releasedAt: { type: string, format: date-time, nullable: true }
+        simulated: { type: boolean }
+    ShipmentStatus: { type: string, enum: [AWAITING_PICKUP, PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, FAILED, RETURNING, RETURNED, VOIDED, INCIDENT] }
+    Shipment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        trackingCode: { type: string }
+        direction: { type: string, enum: [OUTBOUND, RETURN] }
+        carrier: { type: string, example: RePrice Express (mô phỏng) }
+        status: { $ref: '#/components/schemas/ShipmentStatus' }
+        attempts: { type: integer }
+        simulated: { type: boolean }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { $ref: '#/components/schemas/ShipmentStatus' }
+              note: { type: string }
+              occurredAt: { type: string, format: date-time }
+    Review:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orderId: { type: string, format: uuid }
+        rating: { type: integer }
+        comment: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    # --- hồ sơ
+    CaseType: { type: string, enum: [RETURN, NOT_RECEIVED, COMPLAINT] }
+    CaseReason: { type: string, enum: [WRONG_DEVICE, NOT_AS_DESCRIBED, UNDISCLOSED_FAULT, MISSING_ACCESSORY, SHIPPING_DAMAGE, NOT_RECEIVED, OTHER] }
+    CaseStatus:
+      type: string
+      enum: [AWAITING_SELLER, AWAITING_BUYER_INFO, AWAITING_SELLER_DECISION, AWAITING_BUYER_CHOICE, ADMIN_REVIEW, PLAN_REVIEW, RETURN_APPROVED, AWAITING_HANDOVER, RETURNING, RETURN_INSPECTION, REFUNDING, RESOLVED, REJECTED, WITHDRAWN]
+    Evidence:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        uploadedBy: { $ref: '#/components/schemas/UserRef' }
+        role: { type: string, enum: [BUYER, SELLER, ADMIN] }
+        note: { type: string }
+        visibility: { type: string, enum: [PARTIES, ADMIN_ONLY] }
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              fileName: { type: string }
+              mimeType: { type: string }
+              sizeBytes: { type: integer }
+              url: { type: string }
+        createdAt: { type: string, format: date-time }
+    Resolution:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        decision: { type: string, enum: [APPROVE_RETURN, REFUND_NO_RETURN, REJECT, CONTINUE_VERIFY] }
+        rationale: { type: string }
+        requiresReturn: { type: boolean }
+        refundAmount: { type: integer, nullable: true }
+        feeAllocation:
+          type: array
+          items:
+            type: object
+            properties:
+              fee: { type: string }
+              amount: { type: integer }
+              payer: { type: string, enum: [BUYER, SELLER, PLATFORM, UNDECIDED] }
+        reviewDeadline: { type: string, format: date-time }
+        isCurrent: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    ShippingVerification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        shipmentId: { type: string, format: uuid }
+        ticketCode: { type: string, nullable: true }
+        question: { type: string }
+        status: { type: string, enum: [NOT_SENT, SENT, AWAITING, RESPONDED] }
+        response: { type: string, nullable: true }
+        outcome: { type: string, nullable: true }
+        sentAt: { type: string, format: date-time, nullable: true }
+        respondedAt: { type: string, format: date-time, nullable: true }
+    Refund:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        caseId: { type: string, format: uuid }
+        amount: { type: integer }
+        status: { type: string, enum: [APPROVED, PROCESSING, SUCCEEDED, FAILED, RECONCILING] }
+        providerRef: { type: string, nullable: true }
+        failureReason: { type: string, nullable: true }
+        allowedActions: { type: array, items: { type: string, enum: [PROCESS, RETRY, REPORT_NOT_RECEIVED] } }
+        updatedAt: { type: string, format: date-time }
+    SupportCase:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: HS-20261017-0003 }
+        orderId: { type: string, format: uuid }
+        orderCode: { type: string }
+        type: { $ref: '#/components/schemas/CaseType' }
+        reason: { $ref: '#/components/schemas/CaseReason' }
+        description: { type: string }
+        status: { $ref: '#/components/schemas/CaseStatus' }
+        nextStep: { $ref: '#/components/schemas/Deadline' }
+        supplementUsed: { type: boolean }
+        orderItemIds: { type: array, items: { type: string, format: uuid } }
+        committedSnapshot: { $ref: '#/components/schemas/OrderItem' }
+        evidence: { type: array, items: { $ref: '#/components/schemas/Evidence' } }
+        timeline: { type: array, items: { $ref: '#/components/schemas/StatusChange' } }
+        currentResolution: { allOf: [{ $ref: '#/components/schemas/Resolution' }], nullable: true }
+        shippingVerifications: { type: array, items: { $ref: '#/components/schemas/ShippingVerification' } }
+        returnShipment: { allOf: [{ $ref: '#/components/schemas/Shipment' }], nullable: true }
+        returnAddress: { allOf: [{ $ref: '#/components/schemas/ShippingInfo' }], nullable: true }
+        refund: { allOf: [{ $ref: '#/components/schemas/Refund' }], nullable: true }
+        moneyStatus:
+          type: object
+          description: Trạng thái tiền hiển thị cho hai bên
+          properties:
+            payment: { type: string }
+            payout: { type: string, nullable: true }
+            refund: { type: string, nullable: true }
+        assignedAdmin: { allOf: [{ $ref: '#/components/schemas/UserRef' }], nullable: true }
+        openedAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time, nullable: true }
+        allowedActions:
+          type: array
+          items:
+            type: string
+            enum: [ADD_EVIDENCE, SELLER_AGREE, SELLER_REJECT, SELLER_REQUEST_INFO, BUYER_SUPPLEMENT, BUYER_ESCALATE, BUYER_WITHDRAW, RETURN_HANDOVER, RETURN_INSPECT, REQUEST_REVIEW, REPORT_REFUND_NOT_RECEIVED]
+
+    # --- dữ liệu tham chiếu
+    ReferenceStatus: { type: string, enum: [PENDING_COMPLETION, PENDING_VERIFICATION, ELIGIBLE, EXCLUDED, REVOKED] }
+    FlagCode:
+      type: string
+      enum: [PAYMENT_DELIVERY_CONTRADICTION, SNAPSHOT_MISSING_OR_INCONSISTENT, DUPLICATE_DETAIL_CONFLICT, BUYER_SELLER_SAME_SUBJECT, DEVICE_CIRCULATION, ELIGIBLE_THEN_RETURNED]
+    ReferenceTransaction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orderItemId: { type: string, format: uuid, nullable: true }
+        orderCode: { type: string, nullable: true }
+        variant: { $ref: '#/components/schemas/PhoneVariant' }
+        conditionKey: { type: string, nullable: true }
+        dataSource: { $ref: '#/components/schemas/DataSource' }
+        status: { $ref: '#/components/schemas/ReferenceStatus' }
+        statusReasons: { type: array, items: { type: string } }
+        actualPrice: { type: integer }
+        transactionDate: { type: string, format: date }
+        eligibleAt: { type: string, format: date-time, nullable: true }
+        clusterId: { type: string, format: uuid, nullable: true }
+        openFlags: { type: array, items: { $ref: '#/components/schemas/FlagCode' } }
+        inCurrentRange: { type: boolean, description: Đang nằm trong dải đang công bố }
+    ReferenceTransactionDetail:
+      allOf:
+        - $ref: '#/components/schemas/ReferenceTransaction'
+        - type: object
+          properties:
+            snapshot: { $ref: '#/components/schemas/OrderItem' }
+            flags:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  code: { $ref: '#/components/schemas/FlagCode' }
+                  evidence: { type: string }
+                  status: { type: string, enum: [OPEN, CLEARED, CONFIRMED] }
+                  raisedAt: { type: string, format: date-time }
+            relations:
+              type: array
+              items:
+                type: object
+                properties:
+                  otherId: { type: string, format: uuid }
+                  relationType: { type: string, enum: [SAME_ORDER, SAME_BUYER, SAME_SELLER, SAME_DEVICE] }
+                  basis: { type: string }
+            decisions:
+              type: array
+              items:
+                type: object
+                properties:
+                  admin: { $ref: '#/components/schemas/UserRef' }
+                  action: { type: string }
+                  reason: { type: string }
+                  fromStatus: { $ref: '#/components/schemas/ReferenceStatus' }
+                  toStatus: { $ref: '#/components/schemas/ReferenceStatus' }
+                  at: { type: string, format: date-time }
+            allowedActions:
+              type: array
+              items: { type: string, enum: [ALLOW, KEEP_PENDING, EXCLUDE, REVOKE, REVOKE_RECALC] }
+
+    # --- quản trị
+    Dashboard:
+      type: object
+      properties:
+        usersTotal: { type: integer }
+        activeListings: { type: integer }
+        ordersByStatus: { type: object, additionalProperties: { type: integer } }
+        openCases: { type: integer }
+        overdueCases: { type: integer }
+        reference:
+          type: object
+          properties:
+            byStatus: { type: object, additionalProperties: { type: integer } }
+            openFlags: { type: integer }
+        pricing:
+          type: object
+          properties:
+            groupsWithRange: { type: integer }
+            groupsInsufficient: { type: integer }
+            staleStoreQuotes: { type: integer }
+            lastComputedAt: { type: string, format: date-time, nullable: true }
+            unconfiguredThresholds: { type: array, items: { type: string } }
+        refundsNeedingAttention: { type: integer, description: FAILED hoặc RECONCILING }
+    AuditLog:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        admin: { $ref: '#/components/schemas/UserRef' }
+        action: { type: string }
+        entityType: { type: string }
+        entityId: { type: string, format: uuid }
+        reason: { type: string }
+        before: { type: object, additionalProperties: true }
+        after: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+    Clock:
+      type: object
+      properties:
+        now: { type: string, format: date-time }
+        offsetSeconds: { type: integer }

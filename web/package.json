@@ -1,0 +1,30 @@
+{
+  "name": "reprice-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:pricing": "node scripts/pricing-selftest.mjs",
+    "test:orders": "node scripts/order-selftest.mjs",
+    "test:cases": "node scripts/case-selftest.mjs",
+    "test:negotiation": "node scripts/negotiation-selftest.mjs",
+    "test:shipping": "node scripts/shipping-selftest.mjs",
+    "test:flow": "node scripts/flow-selftest.mjs",
+    "test": "node scripts/pricing-selftest.mjs && node scripts/order-selftest.mjs && node scripts/case-selftest.mjs && node scripts/negotiation-selftest.mjs && node scripts/shipping-selftest.mjs && node scripts/flow-selftest.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "vite": "^5.4.8"
+  }
+}
