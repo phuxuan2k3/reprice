@@ -13,6 +13,13 @@ import (
 // và ngay sau khi tua thời gian demo. Mỗi đơn xử lý trong transaction riêng.
 func (s *Service) RunDue(ctx context.Context) ([]string, error) {
 	now := s.clock.Now()
+	// Báo giá cửa hàng mô phỏng chỉ có hiệu lực 24 giờ: làm mới để bản demo (kể cả sau khi tua giờ)
+	// luôn có giá máy mới.
+	if _, err := s.pool.Exec(ctx, `UPDATE store_price_quotes q SET verified_at = $1::timestamptz - interval '2 hours'
+		FROM store_sources src WHERE src.id = q.source_id AND src.retailer_name LIKE '%(mô phỏng)%'
+		  AND (q.verified_at < $1::timestamptz - interval '12 hours' OR q.verified_at > $1::timestamptz)`, now); err != nil {
+		return nil, err
+	}
 	cancelled, err := s.forEachDue(ctx, `SELECT o.id FROM orders o
 		WHERE o.status = 'AWAITING_PAYMENT' AND o.payment_due_at <= $1`, now,
 		func(tx pgx.Tx, o *orderRow) error {

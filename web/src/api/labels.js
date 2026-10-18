@@ -115,6 +115,7 @@ export const CASE_STATUS = {
   AWAITING_BUYER_INFO: { label: "Chờ người mua bổ sung", tone: "amber" },
   AWAITING_SELLER_DECISION: { label: "Chờ người bán quyết định", tone: "amber" },
   AWAITING_BUYER_CHOICE: { label: "Chờ người mua lựa chọn", tone: "amber" },
+  AWAITING_BUYER_CONFIRM: { label: "Chờ người mua xác nhận đã nhận hàng", tone: "amber" },
   ADMIN_REVIEW: { label: "RePrice đang xem xét", tone: "purple" },
   PLAN_REVIEW: { label: "Đã có phương án, chờ hiệu lực", tone: "purple" },
   RETURN_APPROVED: { label: "Chấp thuận trả hàng", tone: "blue" },
@@ -152,4 +153,16 @@ export const CASE_EVENT = {
   VERIFY_SHIPPING: "Gửi xác minh vận chuyển",
   CONTINUE_VERIFY: "Tiếp tục xác minh",
   REFUND_NOT_RECEIVED: "Người mua báo chưa nhận được tiền hoàn",
+  REDELIVER: "RePrice cho giao lại đơn",
+  BUYER_CONFIRM_RECEIVED: "Người mua xác nhận đã nhận được hàng",
+};
+
+/** Kết quả bên vận chuyển trả lời khi RePrice xác minh (hồ sơ chưa nhận được hàng). */
+export const SHIP_OUTCOME = {
+  DELIVERY_MISRECORDED: "Chưa giao, báo nhầm trạng thái",
+  WRONG_RECIPIENT: "Giao nhầm người, đã lấy lại được hàng",
+  STILL_IN_TRANSIT: "Hàng vẫn đang trong kho/trên đường",
+  RECEIVED_BY_OTHER: "Người thân/hàng xóm đã nhận hộ",
+  LOST: "Mất hàng, không thể giao",
+  INCONCLUSIVE: "Chưa rõ",
 };

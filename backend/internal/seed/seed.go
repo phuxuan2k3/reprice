@@ -109,6 +109,16 @@ func fixturePrices() []int64 {
 	return append(p, 12_000_000, 12_000_000, 12_200_000, 12_400_000, 12_600_000, 12_800_000)
 }
 
+// iphone15Prices: 40 giá cho iPhone 15 256GB tình trạng Tốt, pin 80–89% (P10 ≈ 14tr, P90 ≈ 15,9tr),
+// để demo đăng tin iPhone 15 có đủ giao dịch ra dải giá.
+func iphone15Prices() []int64 {
+	p := []int64{12_900_000, 13_300_000, 13_600_000, 13_800_000}
+	for i := 0; i < 32; i++ {
+		p = append(p, 14_000_000+int64(i)*60_000)
+	}
+	return append(p, 16_000_000, 16_200_000, 16_500_000, 16_900_000)
+}
+
 // Reset xóa dữ liệu nghiệp vụ và nạp lại bộ demo. now là giờ hệ thống (đã cộng độ lệch).
 func Reset(ctx context.Context, pool *pgxpool.Pool, now time.Time) error {
 	hash, err := auth.HashPassword(DemoPassword)
@@ -234,7 +244,8 @@ func (s *seeder) listing(ctx context.Context, l demoListing) error {
 	return nil
 }
 
-// storeQuotes: GĐ1 cho iPhone 13 128GB Đen là 13–14 triệu từ ba chuỗi; vài model khác có một nguồn.
+// storeQuotes: GĐ1 cho iPhone 13 128GB Đen là 13–14 triệu từ ba chuỗi; iPhone 15 256GB mọi màu
+// 19,99–20,79 triệu từ ba chuỗi; vài model khác có một nguồn.
 func (s *seeder) storeQuotes(ctx context.Context) error {
 	chains := []struct{ name, site string }{
 		{"Cửa hàng A (mô phỏng)", "https://example.com/a"},
@@ -248,16 +259,21 @@ func (s *seeder) storeQuotes(ctx context.Context) error {
 			return err
 		}
 	}
-	quotes := []struct {
+	type quote struct {
 		variant string
 		source  int
 		price   int64
-	}{
+	}
+	quotes := []quote{
 		{"Apple|iPhone 13|128|Đen", 0, 13_000_000},
 		{"Apple|iPhone 13|128|Đen", 1, 13_500_000},
 		{"Apple|iPhone 13|128|Đen", 2, 14_000_000},
 		{"Apple|iPhone 14|128|Đen", 0, 16_490_000},
 		{"Samsung|Galaxy S23|256|Xanh", 1, 18_990_000},
+	}
+	for _, color := range []string{"Đen", "Hồng", "Xanh dương", "Vàng"} {
+		v := "Apple|iPhone 15|256|" + color
+		quotes = append(quotes, quote{v, 0, 19_990_000}, quote{v, 1, 20_490_000}, quote{v, 2, 20_790_000})
 	}
 	verified := s.now.Add(-2 * time.Hour)
 	for _, q := range quotes {
@@ -269,24 +285,41 @@ func (s *seeder) storeQuotes(ctx context.Context) error {
 	return nil
 }
 
-// fixture: 42 giao dịch SIMULATED, ELIGIBLE, iPhone 13 128GB Đen, nhóm GOOD|FULL|FROM_80_TO_89,
-// giao dịch từ 4 đến 86 ngày trước (nằm trong cửa sổ 3 tháng, đã qua 3 ngày kiểm tra).
-func (s *seeder) fixture(ctx context.Context) error {
-	vid := s.variantIDs["Apple|iPhone 13|128|Đen"]
+// eligible ghi các giao dịch SIMULATED, ELIGIBLE cho một phiên bản, nhóm GOOD|FULL|FROM_80_TO_89,
+// giao dịch thứ i cách đây 2i+4 ngày (nằm trong cửa sổ 3 tháng, đã qua 3 ngày kiểm tra).
+func (s *seeder) eligible(ctx context.Context, variant string, prices []int64) ([]string, error) {
+	vid := s.variantIDs[variant]
 	battery := 85
 	key, _ := pricing.Condition{Appearance: pricing.AppearanceGood, Functionality: pricing.FunctionalityFull,
 		Battery: pricing.BucketFromPct(&battery)}.Key()
-	ids := make([]string, 0, 45)
-	for i, p := range fixturePrices() {
+	ids := make([]string, 0, len(prices))
+	for i, p := range prices {
 		date := s.now.AddDate(0, 0, -(i*2 + 4))
 		var id string
 		if err := s.tx.QueryRow(ctx, `INSERT INTO reference_transactions (variant_id, condition_key, data_source, status,
 			actual_price, transaction_date, eligible_at, updated_at) VALUES ($1,$2,'SIMULATED','ELIGIBLE',$3,$4,$5,$5) RETURNING id`,
 			vid, key, p, date, date.Add(72*time.Hour)).Scan(&id); err != nil {
-			return err
+			return nil, err
 		}
 		ids = append(ids, id)
 	}
+	return ids, nil
+}
+
+// fixture: 42 giao dịch iPhone 13 128GB Đen (dải 10–12tr, kèm giao dịch chờ xác minh và cụm),
+// và 40 giao dịch iPhone 15 256GB Đen.
+func (s *seeder) fixture(ctx context.Context) error {
+	if _, err := s.eligible(ctx, "Apple|iPhone 15|256|Đen", iphone15Prices()); err != nil {
+		return err
+	}
+	ids, err := s.eligible(ctx, "Apple|iPhone 13|128|Đen", fixturePrices())
+	if err != nil {
+		return err
+	}
+	vid := s.variantIDs["Apple|iPhone 13|128|Đen"]
+	battery := 85
+	key, _ := pricing.Condition{Appearance: pricing.AppearanceGood, Functionality: pricing.FunctionalityFull,
+		Battery: pricing.BucketFromPct(&battery)}.Key()
 
 	// Ba giao dịch cùng nhóm đang chờ QTV xác minh, để demo màn quản trị dữ liệu tham chiếu.
 	// Chúng không nằm trong 42 giao dịch của dải 10–12 triệu cho đến khi QTV cho phép.

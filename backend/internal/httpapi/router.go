@@ -125,6 +125,7 @@ func (s *Server) Routes() http.Handler {
 				r.Post("/seller-response", s.sellerResponse)
 				r.Post("/buyer-supplement", s.buyerSupplement)
 				r.Post("/buyer-choice", s.buyerChoice)
+				r.Post("/buyer-confirm", s.buyerConfirm)
 				r.Post("/return-handover", s.returnHandover)
 				r.Post("/return-inspection", s.returnInspection)
 				r.Post("/review-request", s.reviewRequest)

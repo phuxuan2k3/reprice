@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import { caseApi, demoApi, tradeApi } from "../../api/client";
 import { CASE_REASON } from "../../api/labels";
-import { ORDER_STATUS, PAYMENT_CHANNELS, PAYMENT_STATUS, PAYOUT_STATUS, SHIPMENT_STATUS } from "../../api/labels";
+import { ORDER_STATUS, PAYMENT_CHANNELS, PAYMENT_STATUS, SHIPMENT_STATUS } from "../../api/labels";
 import { useAction, useResource } from "../../api/useResource";
 import { APPEARANCE_LABEL } from "../../api/adapters";
 import StatusBadge from "../../components/StatusBadge";
@@ -120,7 +120,7 @@ export default function TradeOrderPage() {
               );
             })}
             <dl className="mt-3 grid grid-cols-2 gap-y-1.5 border-t border-gray-100 pt-3 text-sm">
-              <dt className="text-ink-500">Phí vận chuyển (tách riêng)</dt>
+              <dt className="text-ink-500">Phí vận chuyển</dt>
               <dd className="text-right tabular-nums">{formatVND(o.shippingFee)}</dd>
               <dt className="font-semibold text-ink-900">Người mua trả</dt>
               <dd className="text-right font-bold tabular-nums text-brand-600">{formatVND(o.payment.amount)}</dd>
@@ -211,12 +211,6 @@ export default function TradeOrderPage() {
                   {o.payment.method ? (o.payment.method === "COD" ? "COD · " : "Trả trước · ") : ""}
                   {PAYMENT_STATUS[o.payment.status] || o.payment.status}
                   {o.payment.simulated && <span className="ml-1 text-xs text-ink-400">(mô phỏng)</span>}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-ink-500">Tiền cho người bán</dt>
-                <dd className="font-medium">
-                  {o.payout ? `${formatVND(o.payout.amount)} · ${PAYOUT_STATUS[o.payout.status] || o.payout.status}` : "Chưa phát sinh"}
                 </dd>
               </div>
               {o.deliveredAt && (
@@ -312,7 +306,7 @@ function ShippingForm({ initial, busy, onSave }) {
         <Field id="ship-ward" label="Phường/xã" value={f.ward} onChange={set("ward")} />
         <Field id="ship-province" label="Tỉnh/thành" value={f.province} onChange={set("province")} />
       </div>
-      <Button type="submit" variant="outline" className="mt-4" disabled={!!busy}>
+      <Button type="submit" className="mt-4" disabled={!!busy}>
         {busy === "ship-info" ? "Đang lưu…" : initial ? "Cập nhật thông tin nhận hàng" : "Lưu thông tin nhận hàng"}
       </Button>
     </form>
@@ -460,7 +454,7 @@ function IssueBox({ o, can }) {
     setSending(true);
     try {
       const c = await caseApi.open(o.id, { type, reason: type === "NOT_RECEIVED" ? "NOT_RECEIVED" : reason, description });
-      if (files.length) await caseApi.addEvidence(c.id, "Bằng chứng khi mở hồ sơ", files);
+      if (files.length && type !== "NOT_RECEIVED") await caseApi.addEvidence(c.id, "Bằng chứng khi mở hồ sơ", files);
       showToast(`Đã mở hồ sơ ${c.code}.`);
       navigate(`/cases/${c.id}`);
     } catch (err) {
@@ -493,14 +487,16 @@ function IssueBox({ o, can }) {
             </div>
           )}
           <div>
-            <label className="label" htmlFor="issue-desc">Mô tả vấn đề (khác cam kết ở đâu, phát hiện khi nào)</label>
+            <label className="label" htmlFor="issue-desc">{type === "NOT_RECEIVED" ? "Lý do" : "Mô tả vấn đề (khác cam kết ở đâu, phát hiện khi nào)"}</label>
             <textarea id="issue-desc" className="input min-h-[80px]" value={description} onChange={(e) => setDescription(e.target.value)} required />
           </div>
+          {type !== "NOT_RECEIVED" && (
           <div>
             <label className="label" htmlFor="issue-files">Ảnh / video bằng chứng (không bắt buộc)</label>
             <input id="issue-files" type="file" multiple accept="image/*,video/mp4,video/webm,application/pdf" className="block text-xs"
               onChange={(e) => setFiles([...e.target.files].slice(0, 6))} />
           </div>
+          )}
           <div>
             <Button type="submit" disabled={sending || !description.trim()}>{sending ? "Đang gửi…" : "Gửi yêu cầu"}</Button>
           </div>

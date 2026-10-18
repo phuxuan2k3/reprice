@@ -195,6 +195,7 @@ export const caseApi = {
   sellerResponse: (id, action, message) => post(`/cases/${id}/seller-response`, { action, message }),
   buyerSupplement: (id, message) => post(`/cases/${id}/buyer-supplement`, { message }),
   buyerChoice: (id, action, note) => post(`/cases/${id}/buyer-choice`, { action, note }),
+  buyerConfirm: (id, received, note) => post(`/cases/${id}/buyer-confirm`, { received, note }),
   returnHandover: (id, obstacle) => post(`/cases/${id}/return-handover`, { obstacle }),
   returnInspection: (id, result, problemType, message) => post(`/cases/${id}/return-inspection`, { result, problemType, message }),
   reviewRequest: (id, reason) => post(`/cases/${id}/review-request`, { reason }),

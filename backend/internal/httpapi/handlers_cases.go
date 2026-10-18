@@ -148,6 +148,18 @@ func (s *Server) buyerChoice(w http.ResponseWriter, r *http.Request) {
 	respond(w, r, http.StatusOK, c, err)
 }
 
+func (s *Server) buyerConfirm(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Received bool   `json:"received"`
+		Note     string `json:"note"`
+	}
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	c, err := s.trade.BuyerConfirm(r.Context(), chi.URLParam(r, "id"), currentUser(r).ID, in.Received, in.Note)
+	respond(w, r, http.StatusOK, c, err)
+}
+
 func (s *Server) returnHandover(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Obstacle string `json:"obstacle"`

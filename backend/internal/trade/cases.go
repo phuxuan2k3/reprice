@@ -22,6 +22,7 @@ const (
 	ReturnHandoverWindow  = 72 * time.Hour
 	ReturnInspectWindow   = 48 * time.Hour
 	PlanReviewWindow      = 48 * time.Hour
+	BuyerConfirmWindow    = 48 * time.Hour
 )
 
 var closedCaseStatus = map[string]bool{"RESOLVED": true, "REJECTED": true, "WITHDRAWN": true}
@@ -264,6 +265,7 @@ var partyAction = map[string]string{
 	"AWAITING_BUYER_INFO":      "Người mua bổ sung thông tin theo yêu cầu",
 	"AWAITING_SELLER_DECISION": "Người bán quyết định sau khi người mua bổ sung",
 	"AWAITING_BUYER_CHOICE":    "Người mua chọn chuyển RePrice giải quyết hoặc kết thúc",
+	"AWAITING_BUYER_CONFIRM":   "Người mua kiểm tra với người nhận hộ và xác nhận đã nhận được hàng hay chưa",
 	"ADMIN_REVIEW":             "RePrice xem xét hồ sơ",
 	"PLAN_REVIEW":              "Hai bên có thể đề nghị xem xét lại phương án",
 	"AWAITING_HANDOVER":        "Người mua gửi trả hàng",
@@ -304,6 +306,10 @@ func (c *SupportCase) decorate(viewerID string, isAdmin bool) {
 	case "AWAITING_BUYER_CHOICE":
 		if buyer {
 			acts = append(acts, "BUYER_ESCALATE", "BUYER_WITHDRAW")
+		}
+	case "AWAITING_BUYER_CONFIRM":
+		if buyer {
+			acts = append(acts, "BUYER_CONFIRM_RECEIVED", "BUYER_STILL_NOT_RECEIVED")
 		}
 	case "AWAITING_HANDOVER":
 		if buyer {
@@ -892,6 +898,9 @@ func (s *Service) AdminRequestInfo(ctx context.Context, id, adminID, party, mess
 	})
 }
 
+var verifyOutcomes = map[string]bool{"DELIVERY_MISRECORDED": true, "STILL_IN_TRANSIT": true, "WRONG_RECIPIENT": true,
+	"RECEIVED_BY_OTHER": true, "LOST": true, "INCONCLUSIVE": true}
+
 // AdminVerifyShipping ghi yêu cầu xác minh gửi đơn vị vận chuyển (mô phỏng) và có thể ghi luôn phản hồi.
 func (s *Service) AdminVerifyShipping(ctx context.Context, id, adminID, question, outcome, response string) (*SupportCase, error) {
 	if strings.TrimSpace(question) == "" {
@@ -902,6 +911,9 @@ func (s *Service) AdminVerifyShipping(ctx context.Context, id, adminID, question
 		if err := tx.QueryRow(ctx, `SELECT id FROM shipments WHERE order_id=$1 ORDER BY (support_case_id = $2) DESC NULLS LAST, created_at DESC LIMIT 1`,
 			c.orderID, c.id).Scan(&shipID); err != nil {
 			return apperr.New(apperr.InvalidState, "Đơn chưa có vận đơn để xác minh.")
+		}
+		if outcome != "" && !verifyOutcomes[outcome] {
+			return apperr.Field("outcome", "Kết quả xác minh không hợp lệ.")
 		}
 		status, var1, var2 := "SENT", any(nil), any(nil)
 		var respAt any
@@ -926,13 +938,31 @@ func (s *Service) AdminResolve(ctx context.Context, id, adminID, decision, ratio
 	requiresReturn := decision == "APPROVE_RETURN"
 	switch decision {
 	case "APPROVE_RETURN", "REFUND_NO_RETURN", "REJECT":
-	case "CONTINUE_VERIFY":
+	case "CONTINUE_VERIFY", "REDELIVER", "CONFIRM_WITH_BUYER":
 	default:
 		return nil, apperr.Field("decision", "Phương án không hợp lệ.")
 	}
 	return s.caseAct(ctx, id, adminID, true, func(tx pgx.Tx, c *caseRow, now time.Time) error {
 		if c.status != "ADMIN_REVIEW" {
 			return invalidState("Chỉ ban hành phương án khi hồ sơ đang ở RePrice.")
+		}
+		switch decision {
+		case "REDELIVER", "CONFIRM_WITH_BUYER":
+			if c.typ != "NOT_RECEIVED" {
+				return apperr.Field("decision", "Phương án này chỉ dùng cho hồ sơ chưa nhận được hàng.")
+			}
+			if decision == "REDELIVER" {
+				return redeliver(ctx, tx, now, c, adminID, rationale)
+			}
+			if err := moveCase(ctx, tx, now, c, "AWAITING_BUYER_CONFIRM", adminID, "ASK_BUYER_CONFIRM", rationale, "BUYER", BuyerConfirmWindow); err != nil {
+				return err
+			}
+			return notifyParties(ctx, tx, now, c, "Đơn có thể đã được người khác nhận hộ",
+				"Hãy kiểm tra với người nhận hộ rồi xác nhận đã nhận được hàng hay chưa, trong 48 giờ.", c.buyer)
+		case "APPROVE_RETURN":
+			if c.typ == "NOT_RECEIVED" {
+				return apperr.Field("decision", "Người mua chưa nhận được hàng nên không thể trả hàng.")
+			}
 		}
 		if decision == "CONTINUE_VERIFY" {
 			_, err := tx.Exec(ctx, `INSERT INTO case_events (case_id, actor_id, action, note, created_at) VALUES ($1,$2,'CONTINUE_VERIFY',$3,$4)`,
@@ -952,6 +982,68 @@ func (s *Service) AdminResolve(ctx context.Context, id, adminID, decision, ratio
 		}
 		return notifyParties(ctx, tx, now, c, "RePrice đã ban hành phương án cho "+c.code,
 			"Phương án có hiệu lực sau 48 giờ nếu không có đề nghị xem xét lại.", c.buyer, c.seller)
+	})
+}
+
+// redeliver: bên vận chuyển chưa giao hoặc giao nhầm nhưng lấy lại được hàng → giao lại cho người mua.
+// Đơn quay về "Đang giao"; khi giao thành công lại có 3 ngày kiểm tra mới. Áp dụng ngay, không cần 48 giờ.
+func redeliver(ctx context.Context, tx pgx.Tx, now time.Time, c *caseRow, adminID, rationale string) error {
+	var shipID string
+	if err := tx.QueryRow(ctx, `SELECT id FROM shipments WHERE order_id=$1 AND direction='OUTBOUND' AND status <> 'VOIDED'
+		ORDER BY created_at DESC LIMIT 1`, c.orderID).Scan(&shipID); err != nil {
+		return apperr.New(apperr.InvalidState, "Đơn chưa có vận đơn để giao lại.")
+	}
+	if err := shipmentEvent(ctx, tx, now, shipID, "OUT_FOR_DELIVERY", "Giao lại theo yêu cầu của RePrice"); err != nil {
+		return err
+	}
+	o, err := lockOrder(ctx, tx, c.orderID)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE orders SET delivered_at=NULL, received_at=NULL, return_deadline=NULL WHERE id=$1`, o.id); err != nil {
+		return err
+	}
+	if err := setOrderStatus(ctx, tx, now, o, "SHIPPING", adminID, "Giao lại sau xác minh hồ sơ "+c.code); err != nil {
+		return err
+	}
+	if err := moveCase(ctx, tx, now, c, "RESOLVED", adminID, "REDELIVER", rationale, "", 0); err != nil {
+		return err
+	}
+	return notifyParties(ctx, tx, now, c, "Đơn sẽ được giao lại",
+		"Đơn vị vận chuyển đã xác minh và sẽ giao lại cho người mua.", c.buyer, c.seller)
+}
+
+// BuyerConfirm: người mua trả lời sau khi RePrice báo đơn có thể đã được người khác nhận hộ.
+// Đã nhận → đóng hồ sơ, đơn chuyển "Đã nhận hàng" với 3 ngày kiểm tra tính từ lúc xác nhận.
+// Vẫn chưa nhận → trả hồ sơ về RePrice, đơn vẫn tạm dừng.
+func (s *Service) BuyerConfirm(ctx context.Context, id, userID string, received bool, note string) (*SupportCase, error) {
+	return s.caseAct(ctx, id, userID, false, func(tx pgx.Tx, c *caseRow, now time.Time) error {
+		if userID != c.buyer || c.status != "AWAITING_BUYER_CONFIRM" {
+			return invalidState("Hồ sơ không chờ người mua xác nhận.")
+		}
+		if !received {
+			if err := moveCase(ctx, tx, now, c, "ADMIN_REVIEW", userID, "BUYER_STILL_NOT_RECEIVED", note, "ADMIN", 0); err != nil {
+				return err
+			}
+			return notifyParties(ctx, tx, now, c, "Người mua vẫn chưa nhận được hàng", "RePrice tiếp tục xác minh.", c.seller)
+		}
+		if err := moveCase(ctx, tx, now, c, "RESOLVED", userID, "BUYER_CONFIRM_RECEIVED", note, "", 0); err != nil {
+			return err
+		}
+		o, err := lockOrder(ctx, tx, c.orderID)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE orders SET received_at=$2, return_deadline=$3 WHERE id=$1`, o.id, now, now.Add(ReturnWindow)); err != nil {
+			return err
+		}
+		if o.status != "RECEIVED" {
+			if err := setOrderStatus(ctx, tx, now, o, "RECEIVED", userID, "Người mua xác nhận đã nhận hàng (người khác nhận hộ)"); err != nil {
+				return err
+			}
+		}
+		return notifyParties(ctx, tx, now, c, "Người mua đã xác nhận nhận được hàng",
+			"Đơn "+c.code+" tiếp tục, hoàn tất sau 3 ngày kiểm tra.", c.seller)
 	})
 }
 
@@ -1134,7 +1226,7 @@ func refundSucceeded(ctx context.Context, tx pgx.Tx, now time.Time, orderID stri
 func (s *Service) runCaseDeadlines(ctx context.Context) (int, error) {
 	now := s.clock.Now()
 	rows, err := s.pool.Query(ctx, `SELECT id, status FROM support_cases WHERE closed_at IS NULL AND due_at <= $1
-		AND status IN ('AWAITING_SELLER','AWAITING_SELLER_DECISION','AWAITING_BUYER_INFO','AWAITING_BUYER_CHOICE',
+		AND status IN ('AWAITING_SELLER','AWAITING_SELLER_DECISION','AWAITING_BUYER_INFO','AWAITING_BUYER_CHOICE','AWAITING_BUYER_CONFIRM',
 			'AWAITING_HANDOVER','RETURN_INSPECTION','PLAN_REVIEW')`, now)
 	if err != nil {
 		return 0, err
