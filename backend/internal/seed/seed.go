@@ -43,6 +43,9 @@ var users = []demoUser{
 	{key: "s3", name: "Phạm Quân", email: "phamquan@reprice.demo", phone: "0911000003", province: "Đà Nẵng", ward: "Phường Thạch Thang", rating: f(4.9)},
 	{key: "s4", name: "Hoàng Vy", email: "hoangvy@reprice.demo", phone: "0911000004", province: "Hà Nội", ward: "Phường Láng", rating: f(4.7)},
 	{key: "s5", name: "Mai Anh", email: "maianh@reprice.demo", phone: "0911000005", province: "Bình Dương", ward: "Phường Phú Cường", rating: f(4.5)},
+	{key: "s6", name: "Đỗ Khoa", email: "dokhoa@reprice.demo", phone: "0911000006", province: "Cần Thơ", ward: "Phường Tân An", rating: f(4.8)},
+	{key: "s7", name: "Ngô Thảo", email: "ngothao@reprice.demo", phone: "0911000007", province: "Hải Phòng", ward: "Phường Lê Chân", rating: f(4.6)},
+	{key: "s8", name: "Bùi Long", email: "builong@reprice.demo", phone: "0911000008", province: "Đồng Nai", ward: "Phường Trấn Biên", rating: f(4.4)},
 }
 
 type demoListing struct {
@@ -64,12 +67,12 @@ var catalog = []struct {
 	colors       []string
 }{
 	{"Apple", "iPhone 11", []int{64, 128, 256}, []string{"Đen", "Trắng", "Đỏ", "Tím"}},
-	{"Apple", "iPhone 12", []int{64, 128, 256}, []string{"Đen", "Trắng", "Xanh dương"}},
-	{"Apple", "iPhone 13", []int{128, 256, 512}, []string{"Đen", "Trắng", "Hồng", "Xanh dương"}},
+	{"Apple", "iPhone 12", []int{64, 128, 256}, []string{"Đen", "Trắng", "Xanh dương", "Đỏ"}},
+	{"Apple", "iPhone 13", []int{128, 256, 512}, []string{"Đen", "Trắng", "Hồng", "Xanh dương", "Xanh lá"}},
 	{"Apple", "iPhone 14", []int{128, 256, 512}, []string{"Đen", "Trắng", "Tím", "Xanh dương"}},
 	{"Apple", "iPhone 15", []int{128, 256, 512}, []string{"Đen", "Hồng", "Xanh dương", "Vàng"}},
 	{"Samsung", "Galaxy A54", []int{128, 256}, []string{"Đen", "Trắng", "Xanh"}},
-	{"Samsung", "Galaxy S22", []int{128, 256}, []string{"Đen", "Trắng", "Xám"}},
+	{"Samsung", "Galaxy S22", []int{128, 256}, []string{"Đen", "Trắng", "Xám", "Hồng"}},
 	{"Samsung", "Galaxy S23", []int{256, 512}, []string{"Đen", "Kem", "Xanh"}},
 	{"Xiaomi", "Redmi Note 13", []int{128, 256}, []string{"Đen", "Xanh"}},
 	{"Xiaomi", "Xiaomi 13", []int{256}, []string{"Đen", "Trắng", "Xanh"}},
@@ -88,7 +91,7 @@ var listings = []demoListing{
 		"Dùng kỹ, có ốp từ đầu. Viền có vài vết xước nhẹ khó thấy.", 240},
 	{"s3", "Apple", "iPhone 13", "Đen", 128, pricing.AppearanceGood, 84, 16, 12_800_000, []string{"BOX", "CABLE", "CASE"}, "NONE",
 		"Máy đẹp, tặng ốp lưng. Pin 84%.", 410},
-	{"s2", "Apple", "iPhone 12", "Đen", 128, pricing.AppearanceGood, 84, 20, 6_850_000, []string{"CASE"}, "NONE",
+	{"s2", "Apple", "iPhone 12", "Xanh dương", 128, pricing.AppearanceGood, 84, 20, 6_850_000, []string{"CASE"}, "NONE",
 		"Màn hình còn mới, viền xước nhẹ. Bán kèm ốp lưng.", 305},
 	{"s3", "Apple", "iPhone 14", "Đen", 128, pricing.AppearanceExcellent, 93, 6, 11_900_000, []string{"BOX", "CHARGER", "CABLE", "EARPHONES"}, "BRAND",
 		"Chính hãng VN, còn bảo hành. Như mới, không trầy xước.", 65},
@@ -98,6 +101,77 @@ var listings = []demoListing{
 		"Full box, có hóa đơn mua hàng.", 4350},
 	{"s2", "Apple", "iPhone 11", "Trắng", 128, pricing.AppearanceFair, 79, 30, 4_350_000, nil, "NONE",
 		"Máy có vết xước rõ ở lưng, chức năng đầy đủ.", 15200},
+
+	// iPhone 15 256GB tình trạng Tốt, pin 80–89%: cùng nhóm với 40 giao dịch mô phỏng (dải ≈ 14–15,9tr).
+	{"s4", "Apple", "iPhone 15", "Hồng", 256, pricing.AppearanceGood, 86, 25, 14_900_000, []string{"CHARGER", "CABLE", "CASE"}, "NONE",
+		"Dùng hơn 2 năm, luôn dán cường lực và đeo ốp nên còn đẹp. Pin 86%. Tặng củ, cáp và ốp lưng.", 48},
+	{"s7", "Apple", "iPhone 15", "Đen", 256, pricing.AppearanceGood, 83, 22, 13_400_000, []string{"CABLE"}, "NONE",
+		"Cần bán gấp, máy zin chưa sửa. Cạnh viền có vài vết xước nhỏ.", 190},
+	{"s6", "Apple", "iPhone 15", "Hồng", 256, pricing.AppearanceGood, 88, 18, 16_800_000, []string{"BOX", "CHARGER", "CABLE"}, "STORE",
+		"Fullbox, còn bảo hành cửa hàng. Pin 88%.", 620},
+	{"s2", "Apple", "iPhone 15", "Đen", 128, pricing.AppearanceExcellent, 95, 9, 15_500_000, []string{"BOX", "CABLE"}, "BRAND",
+		"Như mới, còn bảo hành Apple. Mua tại TGDĐ, có hóa đơn.", 75},
+	{"s8", "Apple", "iPhone 15", "Hồng", 512, pricing.AppearanceExcellent, 97, 5, 21_500_000, []string{"BOX", "CHARGER", "CABLE", "CASE"}, "BRAND",
+		"Bản 512GB, mới dùng 5 tháng, đổi máy nên bán lại.", 960},
+
+	{"s5", "Apple", "iPhone 14", "Xanh dương", 128, pricing.AppearanceGood, 87, 20, 10_900_000, []string{"CABLE", "CASE"}, "NONE",
+		"Màu xanh dương đẹp, máy zin, pin 87%. Có ốp lưng.", 260},
+	{"s6", "Apple", "iPhone 14", "Xanh dương", 256, pricing.AppearanceExcellent, 91, 14, 13_200_000, []string{"BOX", "CABLE"}, "STORE",
+		"Bản 256GB, ngoại hình như mới, còn bảo hành cửa hàng 2 tháng.", 1840},
+	{"s6", "Apple", "iPhone 13", "Xanh dương", 128, pricing.AppearanceGood, 87, 22, 10_700_000, []string{"BOX", "CABLE"}, "NONE",
+		"Máy dùng kỹ, không trầy màn hình. Pin 87%.", 330},
+	{"s7", "Apple", "iPhone 13", "Xanh lá", 128, pricing.AppearanceExcellent, 92, 15, 11_800_000, []string{"BOX", "CHARGER", "CABLE"}, "NONE",
+		"Màu xanh lá hiếm, như mới, pin 92%.", 510},
+	{"s8", "Apple", "iPhone 13", "Đen", 256, pricing.AppearanceFair, 81, 30, 9_900_000, []string{"CABLE"}, "NONE",
+		"Lưng có vết xước, màn hình đẹp. Bản 256GB.", 2900},
+	{"seller", "Apple", "iPhone 12", "Đỏ", 64, pricing.AppearanceGood, 82, 28, 6_200_000, []string{"BOX"}, "NONE",
+		"iPhone 12 đỏ, còn hộp. Pin 82%.", 720},
+	{"s3", "Apple", "iPhone 11", "Đỏ", 64, pricing.AppearanceGood, 81, 36, 4_500_000, []string{"BOX", "CABLE"}, "NONE",
+		"Máy chính hãng VN/A, còn hộp. Dùng tốt, pin 81%.", 1380},
+	{"s6", "Apple", "iPhone 11", "Tím", 128, pricing.AppearanceExcellent, 90, 24, 5_300_000, []string{"BOX", "CABLE"}, "NONE",
+		"Màu tím, giữ rất kỹ, có hộp. Pin 90%.", 4100},
+
+	{"s7", "Samsung", "Galaxy A54", "Trắng", 128, pricing.AppearanceGood, 88, 16, 5_400_000, []string{"CHARGER", "CABLE"}, "NONE",
+		"Máy đẹp, pin trâu, màn hình không xước.", 140},
+	{"s8", "Samsung", "Galaxy A54", "Đen", 256, pricing.AppearanceGood, 85, 20, 5_900_000, []string{"BOX", "CHARGER"}, "STORE",
+		"Bản 256GB, còn bảo hành cửa hàng.", 2200},
+	{"s2", "Samsung", "Galaxy S22", "Hồng", 128, pricing.AppearanceGood, 84, 30, 7_400_000, []string{"CABLE", "CASE"}, "NONE",
+		"Màu hồng, máy nhỏ gọn, chụp ảnh đẹp. Pin 84%.", 880},
+	{"s5", "Samsung", "Galaxy S22", "Đen", 256, pricing.AppearanceExcellent, 90, 22, 8_600_000, []string{"BOX", "CHARGER", "CABLE"}, "NONE",
+		"Fullbox, máy như mới.", 5300},
+	{"seller", "Samsung", "Galaxy S23", "Kem", 256, pricing.AppearanceExcellent, 94, 10, 14_200_000, []string{"BOX", "CHARGER", "CABLE"}, "BRAND",
+		"Còn bảo hành Samsung 2 tháng, ngoại hình 99%.", 400},
+	{"s3", "Xiaomi", "Xiaomi 13", "Trắng", 256, pricing.AppearanceGood, 87, 18, 8_900_000, []string{"CHARGER", "CABLE"}, "NONE",
+		"Camera Leica chụp rất đẹp, sạc nhanh 67W kèm theo.", 1650},
+	{"s4", "OPPO", "OPPO A78", "Xanh", 128, pricing.AppearanceGood, 87, 14, 3_600_000, []string{"BOX", "CHARGER", "CABLE"}, "NONE",
+		"Máy dùng lướt, pin tốt, còn hộp.", 600},
+	{"s8", "OPPO", "OPPO A78", "Đen", 128, pricing.AppearanceFair, 79, 26, 2_900_000, nil, "NONE",
+		"Lưng có vết dấu vân tay, viền xước nhẹ. Máy chạy bình thường.", 7200},
+	{"s7", "vivo", "vivo Y36", "Vàng", 128, pricing.AppearanceGood, 89, 12, 3_300_000, []string{"BOX", "CHARGER"}, "NONE",
+		"Máy pin trâu, phù hợp cho người lớn tuổi.", 3100},
+}
+
+// samplePhotos: ảnh thật lấy từ Wikimedia Commons (web/public/sample-photos, xem credits.html),
+// theo "model|màu"; "model|*" dùng khi màu không có ảnh riêng. Model không có ảnh dùng hình minh họa.
+var samplePhotos = map[string][]string{
+	"iPhone 11|Đỏ": {"i11c"}, "iPhone 11|Tím": {"i11a"}, "iPhone 11|Trắng": {"i11b"}, "iPhone 11|*": {"i11a"},
+	"iPhone 12|Đỏ": {"i12a"}, "iPhone 12|*": {"i12c"},
+	"iPhone 13|Xanh dương": {"i13a", "i13b"}, "iPhone 13|Xanh lá": {"i13c", "i13b"}, "iPhone 13|*": {"i13b"},
+	"iPhone 14|Xanh dương": {"i14a", "i14b"}, "iPhone 14|*": {"i14b"},
+	"iPhone 15|*":      {"i15b", "i15a"},
+	"Galaxy A54|Trắng": {"a54a", "a54b"}, "Galaxy A54|*": {"a54b"},
+	"Galaxy S22|Hồng": {"s22a", "s22b"}, "Galaxy S22|*": {"s22b"},
+	"Galaxy S23|*":  {"s23a"},
+	"Xiaomi 13|Đen": {"x13a", "x13c"}, "Xiaomi 13|*": {"x13c"},
+	"OPPO A78|Xanh": {"a78a", "a78b", "a78c"}, "OPPO A78|*": {"a78b", "a78c"},
+	"vivo Y36|*": {"y36a"},
+}
+
+func photosFor(model, color string) []string {
+	if p, ok := samplePhotos[model+"|"+color]; ok {
+		return p
+	}
+	return samplePhotos[model+"|*"]
 }
 
 // fixturePrices: 42 giá cho P10 = 10tr, P90 = 12tr (web/src/data/demoFixture.js).
@@ -238,6 +312,12 @@ func (s *seeder) listing(ctx context.Context, l demoListing) error {
 	}
 	for _, a := range l.accessories {
 		if _, err := s.tx.Exec(ctx, `INSERT INTO listing_accessories (listing_id, type) VALUES ($1,$2)`, id, a); err != nil {
+			return err
+		}
+	}
+	for i, p := range photosFor(l.model, l.color) {
+		if _, err := s.tx.Exec(ctx, `INSERT INTO listing_photos (listing_id, url, position, is_cover) VALUES ($1,$2,$3,$4)`,
+			id, "/sample-photos/"+p+".jpg", i, i == 0); err != nil {
 			return err
 		}
 	}

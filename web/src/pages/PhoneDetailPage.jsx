@@ -246,7 +246,11 @@ export default function PhoneDetailPage() {
             </div>
             {/* Thumbnail */}
             <div className="mt-4 grid grid-cols-3 gap-3">
-              {VARIANTS.map((v) => (
+              {/* Tin có ảnh thật: chỉ hiện các ảnh đó (tối đa 3); không có thì hiện 3 góc hình minh họa. */}
+              {(phone.photoUrls?.length
+                ? VARIANTS.slice(0, phone.photoUrls.length).map((v, i) => ({ ...v, label: `Ảnh ${i + 1}` }))
+                : VARIANTS
+              ).map((v) => (
                 <button
                   key={v.key}
                   type="button"

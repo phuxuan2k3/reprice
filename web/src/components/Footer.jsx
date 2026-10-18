@@ -34,6 +34,9 @@ export default function Footer() {
             <div className="mt-4">
               <DataBadge variant="dark" />
             </div>
+            <a href="/sample-photos/credits.html" target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs text-white/70 underline hover:text-white">
+              Nguồn ảnh sản phẩm mẫu
+            </a>
           </div>
 
           {/* Cột 2 — Thông tin */}
