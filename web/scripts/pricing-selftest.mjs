@@ -268,8 +268,9 @@ const cfgZ1 = { ...PRICING_CONFIG, zThreshold: 1 };
 const bZ = evaluateDemoCase("below_range", { now: NOW, config: cfgZ1 });
 const aZ = evaluateDemoCase("above_range", { now: NOW, config: cfgZ1 });
 check("DEMO-08 Z vượt ngưỡng thấp -> LOW_PRICE", bZ.reviewDirection === "LOW_PRICE", String(bZ.reviewDirection));
-check("DEMO-09 LOW_PRICE có tiêu đề đúng", bZ.promptTitle === "Kiểm tra thêm trước khi quyết định", String(bZ.promptTitle));
+check("DEMO-09 LOW_PRICE có tiêu đề đúng", bZ.promptTitle === "Gợi ý trước khi quyết định", String(bZ.promptTitle));
 check("DEMO-10 Z vượt ngưỡng cao -> HIGH_PRICE", aZ.reviewDirection === "HIGH_PRICE", String(aZ.reviewDirection));
+check("DEMO-10b HIGH_PRICE có tiêu đề đúng", aZ.promptTitle === "Gợi ý trước khi quyết định", String(aZ.promptTitle));
 check("DEMO-11 trong khoảng không bao giờ nhắc", evaluateDemoCase("in_range", { now: NOW, config: cfgZ1 }).showReviewPrompt === false);
 
 /* ========================= TRẠNG THÁI THAM CHIẾU ========================= */

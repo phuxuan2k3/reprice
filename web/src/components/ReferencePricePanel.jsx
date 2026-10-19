@@ -160,17 +160,23 @@ function DetailToggle({ open, onClick, children }) {
   );
 }
 
+// Lời nhắc dùng chung một kiểu khung xanh cho cả LOW_PRICE và HIGH_PRICE; chỉ nội dung khác nhau.
 function ReviewPrompt({ reference }) {
   if (!reference?.showReviewPrompt || !reference.promptTitle) return null;
-  const low = reference.reviewDirection === "LOW_PRICE";
   return (
-    <div
-      className={`mt-3 rounded-lg p-3 text-xs leading-relaxed ${
-        low ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"
-      }`}
-    >
-      <div className="font-semibold">{reference.promptTitle}</div>
-      <div className="mt-0.5">{reference.promptBody}</div>
+    <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+      <span
+        aria-hidden="true"
+        className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#1D4ED8] text-[11px] font-bold leading-none text-white"
+      >
+        i
+      </span>
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-[#1D4ED8]">{reference.promptTitle}</div>
+        <p className="mt-0.5 break-words text-[13px] leading-normal text-[#475569]">
+          {reference.promptBody}
+        </p>
+      </div>
     </div>
   );
 }
@@ -351,9 +357,12 @@ function UsedPriceBlock({ reference, phone, markerLabel, role }) {
         {reference.positionText}
       </p>
 
+      <ReviewPrompt reference={reference} />
+
       {prices.length > 0 && (
         <>
-          <div className="mt-3">
+          {/* Nút đã có mt-3: ngay dưới khung lời nhắc chỉ cách 12px. */}
+          <div className={reference.showReviewPrompt ? "" : "mt-3"}>
             <DetailToggle open={open} onClick={() => setOpen((v) => !v)}>
               {open ? "Ẩn dữ liệu so sánh" : "Xem dữ liệu so sánh"}
             </DetailToggle>
@@ -361,8 +370,6 @@ function UsedPriceBlock({ reference, phone, markerLabel, role }) {
           {open && <ComparisonList used={used} />}
         </>
       )}
-
-      <ReviewPrompt reference={reference} />
     </BlockShell>
   );
 }

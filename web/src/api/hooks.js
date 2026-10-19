@@ -26,10 +26,15 @@ export function useApiListings() {
  * đổi vai trò) thì tải lại để backend trả đúng nhãn "Giá đang rao" / "Giá bạn nhập".
  */
 export function useApiListing(id, reloadKey) {
-  const [state, setState] = useState({ phone: null, reference: null, loading: true, error: null });
+  const [state, setState] = useState({ id, phone: null, reference: null, loading: true, error: null });
   useEffect(() => {
     let alive = true;
-    setState((s) => ({ ...s, loading: true, error: null }));
+    // Đổi sang tin khác: bỏ dữ liệu cũ để không hiện nhầm giá tham khảo/lời nhắc của tin trước.
+    setState((s) =>
+      s.id === id
+        ? { ...s, loading: true, error: null }
+        : { id, phone: null, reference: null, loading: true, error: null }
+    );
     (async () => {
       const [listing, ref] = await Promise.all([listingsApi.get(id), listingsApi.referencePrice(id)]);
       let prices = [];
@@ -40,8 +45,8 @@ export function useApiListing(id, reloadKey) {
       }
       return { phone: toUiPhone(listing), reference: toUiReference(ref, prices) };
     })()
-      .then((data) => alive && setState({ ...data, loading: false, error: null }))
-      .catch((error) => alive && setState({ phone: null, reference: null, loading: false, error }));
+      .then((data) => alive && setState({ id, ...data, loading: false, error: null }))
+      .catch((error) => alive && setState({ id, phone: null, reference: null, loading: false, error }));
     return () => {
       alive = false;
     };

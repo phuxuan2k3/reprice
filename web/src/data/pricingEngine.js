@@ -631,14 +631,14 @@ export const POSITION_TEXT = {
 export const REVIEW_PROMPT = {
   buyer: {
     LOW_PRICE: {
-      title: "Kiểm tra thêm trước khi quyết định",
+      title: "Gợi ý trước khi quyết định",
       body:
         "Hỏi rõ tình trạng máy, lỗi, phụ kiện và các điều kiện đi kèm mức giá trước khi chốt.",
     },
     HIGH_PRICE: {
-      title: "Nên đối chiếu thêm trước khi thương lượng",
+      title: "Gợi ý trước khi quyết định",
       body:
-        "Xem lại tình trạng máy, phụ kiện, bảo hành và các quyền lợi đi kèm mức giá.",
+        "Bạn có thể thương lượng thêm với người bán dựa trên tình trạng máy, phụ kiện, bảo hành và các quyền lợi đi kèm để thống nhất mức giá phù hợp.",
     },
   },
   seller: {

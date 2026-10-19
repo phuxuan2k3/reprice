@@ -141,7 +141,7 @@ export function toUiReference(ref, prices = []) {
     positionLabel: ref.positionLabel || "UNKNOWN",
     positionText: POSITION_TEXT[ref.positionLabel] || POSITION_TEXT.UNKNOWN,
     showReviewPrompt: !!prompt,
-    reviewDirection: ref.reviewDirection,
+    reviewDirection: prompt ? ref.reviewDirection : null,
     promptTitle: prompt?.title || null,
     promptBody: prompt?.body || null,
   };
