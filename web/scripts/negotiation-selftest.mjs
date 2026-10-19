@@ -22,6 +22,7 @@ import {
   isNegotiationOpen,
   isDuplicateBuyerOffer,
   lastBuyerOffer,
+  offerPriceWarning,
   roundPrice,
   validateOrderDraft,
 } from "../src/data/negotiationRules.js";
@@ -208,6 +209,17 @@ check(
     8600000
   ) === false
 );
+
+/* --------------------------- Cảnh báo giá nhập --------------------------- */
+
+check("Người mua đề nghị bình thường → không cảnh báo", offerPriceWarning("buyer", 9200000, 8600000) === null);
+check("Người mua đề nghị bằng giá rao → không cảnh báo", offerPriceWarning("buyer", 9200000, 9200000) === null);
+check("Người mua đề nghị cao hơn giá rao → ABOVE_LISTING", offerPriceWarning("buyer", 9200000, 92000000)?.code === "ABOVE_LISTING");
+check("Người mua đề nghị < 50% giá rao → FAR_BELOW_LISTING", offerPriceWarning("buyer", 9200000, 920000)?.code === "FAR_BELOW_LISTING");
+check("Người bán đối giá cao hơn giá rao → ABOVE_LISTING", offerPriceWarning("seller", 9200000, 9500000, 8600000)?.code === "ABOVE_LISTING");
+check("Người bán đối giá thấp hơn đề nghị người mua → BELOW_BUYER_OFFER", offerPriceWarning("seller", 9200000, 8500000, 8600000)?.code === "BELOW_BUYER_OFFER");
+check("Người bán đối giá giữa hai bên → không cảnh báo", offerPriceWarning("seller", 9200000, 8900000, 8600000) === null);
+check("Giá không hợp lệ → không cảnh báo (để kiểm tra hợp lệ xử lý)", offerPriceWarning("buyer", 9200000, 0) === null);
 
 /* ------------------------------- Tổng kết ------------------------------- */
 

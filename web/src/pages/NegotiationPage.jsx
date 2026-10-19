@@ -7,6 +7,7 @@ import AccessNotice from "../components/AccessNotice";
 import StatusBadge from "../components/StatusBadge";
 import ReferencePricePanel from "../components/ReferencePricePanel";
 import { formatVND, phoneName } from "../utils/format";
+import { offerPriceWarning } from "../data/negotiationRules";
 
 const STATUS_META = {
   AWAITING_SELLER: { tone: "amber", label: "Đang chờ người bán phản hồi" },
@@ -37,6 +38,8 @@ export default function NegotiationPage() {
   const [offer, setOffer] = useState("");
   const [note, setNote] = useState("");
   const [offerError, setOfferError] = useState("");
+  // Cảnh báo giá bất thường đang chờ người mua xác nhận ({ code, message, price }).
+  const [offerWarning, setOfferWarning] = useState(null);
   const offerRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -127,6 +130,16 @@ export default function NegotiationPage() {
       return;
     }
     setOfferError("");
+    const warning = offerPriceWarning("buyer", phone.price, price);
+    if (warning) {
+      setOfferWarning({ ...warning, price });
+      return;
+    }
+    submitOffer(price);
+  };
+
+  const submitOffer = (price) => {
+    setOfferWarning(null);
     const res = sendOffer(neg.id, price, note.trim());
     if (!res.ok) {
       setOfferError(res.reason);
@@ -359,6 +372,7 @@ export default function NegotiationPage() {
                       onChange={(e) => {
                         setOffer(e.target.value);
                         if (offerError) setOfferError("");
+                        setOfferWarning(null);
                       }}
                     />
                     {offerError && (
@@ -378,6 +392,31 @@ export default function NegotiationPage() {
                     />
                   </div>
                 </div>
+                {offerWarning && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    <p className="font-semibold">{offerWarning.message}</p>
+                    <p className="mt-1">
+                      Giá rao: <strong>{formatVND(phone.price)}</strong> · Giá bạn nhập:{" "}
+                      <strong>{formatVND(offerWarning.price)}</strong>
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button type="button" size="sm" onClick={() => submitOffer(offerWarning.price)}>
+                        Vẫn gửi
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setOfferWarning(null);
+                          offerRef.current?.focus();
+                        }}
+                      >
+                        Sửa lại
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit">Gửi đề nghị</Button>
                   <Button

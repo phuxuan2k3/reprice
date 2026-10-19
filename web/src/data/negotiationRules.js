@@ -81,6 +81,34 @@ export function counterPriceBetween(listingPrice, offer, step = 10000) {
   return roundPrice((listing + o) / 2, step);
 }
 
+/** Đề nghị dưới tỷ lệ này so với giá rao bị coi là thấp bất thường (dễ do gõ thiếu số 0). */
+export const LOW_OFFER_RATIO = 0.5;
+
+/**
+ * Cảnh báo (không chặn) khi giá nhập có vẻ nhầm. Trả null nếu bình thường,
+ * ngược lại { code, message } để giao diện hỏi xác nhận trước khi gửi.
+ *  - role "buyer": đề nghị cao hơn giá rao, hoặc thấp hơn LOW_OFFER_RATIO giá rao.
+ *  - role "seller": đối giá cao hơn giá rao, thấp hơn đề nghị của người mua,
+ *    hoặc thấp hơn LOW_OFFER_RATIO giá rao.
+ */
+export function offerPriceWarning(role, listingPrice, price, buyerOffer = null) {
+  const listing = Number(listingPrice);
+  const p = Number(price);
+  if (!Number.isFinite(listing) || listing <= 0 || !Number.isFinite(p) || p <= 0) return null;
+  if (p > listing) {
+    return role === "buyer"
+      ? { code: "ABOVE_LISTING", message: "Giá bạn đề nghị cao hơn giá đang rao. Nếu muốn mua theo giá rao, hãy dùng Mua ngay." }
+      : { code: "ABOVE_LISTING", message: "Giá bạn đề nghị cao hơn giá bạn đang rao." };
+  }
+  if (role === "seller" && Number.isFinite(Number(buyerOffer)) && p < Number(buyerOffer)) {
+    return { code: "BELOW_BUYER_OFFER", message: "Giá bạn đề nghị thấp hơn giá người mua đã đưa ra." };
+  }
+  if (p < listing * LOW_OFFER_RATIO) {
+    return { code: "FAR_BELOW_LISTING", message: "Giá này thấp hơn một nửa giá rao. Kiểm tra lại xem có gõ thiếu số 0 không." };
+  }
+  return null;
+}
+
 /**
  * Đề nghị mới có TRÙNG với đề nghị người mua vừa gửi không (chống bấm lặp /
  * gửi lại y nguyên khi đề nghị đó còn đang chờ người bán phản hồi)?

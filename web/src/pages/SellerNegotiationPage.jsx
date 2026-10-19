@@ -6,6 +6,7 @@ import Button from "../components/Button";
 import AccessNotice from "../components/AccessNotice";
 import StatusBadge from "../components/StatusBadge";
 import { formatVND, phoneName } from "../utils/format";
+import { offerPriceWarning } from "../data/negotiationRules";
 
 /**
  * CHI TIẾT MỘT PHIÊN THƯƠNG LƯỢNG (vai Người bán).
@@ -34,6 +35,8 @@ export default function SellerNegotiationPage() {
   const [counterInput, setCounterInput] = useState("");
   const [rejectNote, setRejectNote] = useState("");
   const [error, setError] = useState("");
+  // Cảnh báo giá đối bất thường đang chờ người bán xác nhận ({ code, message, price }).
+  const [counterWarning, setCounterWarning] = useState(null);
 
   const neg = negotiations.find((n) => n.id === negId);
 
@@ -95,6 +98,16 @@ export default function SellerNegotiationPage() {
       setError("Giá đề nghị phải là số hợp lệ lớn hơn 0.");
       return;
     }
+    const warning = offerPriceWarning("seller", neg.listingPrice, price, offer?.price);
+    if (warning) {
+      setCounterWarning({ ...warning, price });
+      return;
+    }
+    submitCounter(price);
+  };
+
+  const submitCounter = (price) => {
+    setCounterWarning(null);
     run(sellerRespond(neg.id, "counter", price), "Đã gửi đề nghị mức giá khác cho người mua.");
   };
 
@@ -233,13 +246,41 @@ export default function SellerNegotiationPage() {
                     className="input max-w-xs"
                     placeholder={String(defaultCounter ?? "")}
                     value={counterInput}
-                    onChange={(e) => setCounterInput(e.target.value)}
+                    onChange={(e) => {
+                      setCounterInput(e.target.value);
+                      setCounterWarning(null);
+                    }}
                   />
+                  {counterWarning && (
+                    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      <p className="font-semibold">{counterWarning.message}</p>
+                      <p className="mt-1">
+                        Giá rao: <strong>{formatVND(neg.listingPrice)}</strong>
+                        {offer && (
+                          <>
+                            {" "}· Người mua đề nghị: <strong>{formatVND(offer.price)}</strong>
+                          </>
+                        )}{" "}
+                        · Giá bạn nhập: <strong>{formatVND(counterWarning.price)}</strong>
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button size="sm" onClick={() => submitCounter(counterWarning.price)}>
+                          Vẫn gửi
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setCounterWarning(null)}>
+                          Sửa lại
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setCounterInput(String(defaultCounter ?? ""))}
+                      onClick={() => {
+                        setCounterInput(String(defaultCounter ?? ""));
+                        setCounterWarning(null);
+                      }}
                     >
                       Dùng mức giá giữa hai bên
                     </Button>
