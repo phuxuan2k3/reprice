@@ -200,9 +200,11 @@ func Reset(ctx context.Context, pool *pgxpool.Pool, now time.Time) error {
 		return err
 	}
 	return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
-		// Gỡ tham chiếu tới tài khoản trước khi xóa users, rồi đưa các ngưỡng chưa chốt về "chưa thiết lập".
+		// Gỡ tham chiếu tới tài khoản trước khi xóa users, đặt sẵn ngưỡng Z = 1 cho demo,
+		// rồi đưa các ngưỡng chưa chốt về "chưa thiết lập".
 		if _, err := tx.Exec(ctx, `UPDATE pricing_config SET updated_by = NULL,
-			value = CASE WHEN key IN ('z_threshold','max_seller_concentration','max_cluster_concentration',
+			value = CASE WHEN key = 'z_threshold' THEN '1'::jsonb
+				WHEN key IN ('max_seller_concentration','max_cluster_concentration',
 				'min_independent_buyers','min_independent_sellers') THEN NULL ELSE value END`); err != nil {
 			return err
 		}
